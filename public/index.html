@@ -106,6 +106,21 @@
       /* Slightly reduce heavy shadows and spacing to breathe */
       body{margin:10px}
       .card{margin:8px 0}
+      /* make search input expand and button smaller on tall/narrow screens */
+      #useful-card input#cve-search{flex:1;width:auto !important}
+      #useful-card button#cve-search-btn{flex:0 0 110px;padding:8px 10px;font-size:0.95rem}
+    }
+
+    /* Wide landscape (16:9 and wider) adjustments */
+    @media (min-aspect-ratio:16/9) {
+      /* keep three top panels in a row */
+      .top-panels{flex-direction:row}
+      .top-panels > .card{width:auto}
+      /* make search input and button sit nicely side-by-side */
+      #useful-card input#cve-search{width:calc(100% - 140px) !important;flex:0 0 auto}
+      #useful-card button#cve-search-btn{width:120px;flex:0 0 120px}
+      /* slightly increase spacing between columns */
+      .container{gap:24px}
     }
     /* chart panel styling */
     .chart-panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.02));border:1px solid rgba(255,255,255,0.03);position:relative;overflow:hidden;min-height:100px}
