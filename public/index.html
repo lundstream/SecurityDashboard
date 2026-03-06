@@ -355,11 +355,16 @@
         const contentHeight = document.body.scrollHeight;
         if(footer){
           if(contentHeight > window.innerHeight){
+            // footer stays in document flow and spans full width, centered
             footer.style.position = 'static';
-            footer.style.left = '';
-            footer.style.transform = '';
+            footer.style.left = '0';
+            footer.style.transform = 'none';
             footer.style.bottom = '';
             footer.style.zIndex = '';
+            footer.style.width = '100%';
+            footer.style.justifyContent = 'center';
+            footer.style.boxSizing = 'border-box';
+            // remove any body padding added for fixed footer
             document.body.style.paddingBottom = '';
           } else {
             // keep footer fixed at bottom and pad the page so it doesn't overlap
@@ -368,6 +373,8 @@
             footer.style.transform = 'translateX(-50%)';
             footer.style.bottom = '12px';
             footer.style.zIndex = 120;
+            footer.style.width = 'auto';
+            footer.style.justifyContent = '';
             const pad = Math.ceil(footerH + gapBuffer);
             document.body.style.paddingBottom = pad + 'px';
           }
