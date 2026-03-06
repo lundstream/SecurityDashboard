@@ -336,5 +336,31 @@
     <span class="copyright">© 2026 lundstream.net, all rights reserved.</span>
     <div class="footer-spacer" aria-hidden="true"></div>
   </div>
+</div>
+
+  <script>
+    (function(){
+      let resizeTimer = null;
+      function adjustListHeights(){
+        const header = document.querySelector('header');
+        const topPanels = document.querySelector('.top-panels');
+        const footer = document.getElementById('site-footer');
+        const lists = document.querySelectorAll('.list-scroll');
+        const gapBuffer = 12; // small breathing room
+        const headerH = header ? header.getBoundingClientRect().height : 0;
+        const topH = topPanels ? topPanels.getBoundingClientRect().height : 0;
+        const footerH = footer ? footer.getBoundingClientRect().height : 0;
+        const available = Math.max(120, window.innerHeight - headerH - topH - footerH - gapBuffer);
+        lists.forEach(l => { l.style.height = available + 'px'; });
+      }
+      function onResize(){
+        if(resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(adjustListHeights, 120);
+      }
+      window.addEventListener('resize', onResize);
+      window.addEventListener('orientationchange', onResize);
+      document.addEventListener('DOMContentLoaded', function(){ adjustListHeights(); setTimeout(adjustListHeights, 300); });
+    })();
+  </script>
 </body>
 </html>
