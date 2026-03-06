@@ -75,6 +75,9 @@
       header{margin-bottom:8px}
       /* slightly reduce logo svg size for balance */
       .logo svg.feather, .logo i { height:1.2em !important; width:1.2em !important; }
+      /* stack Services label above badges on small screens, keep badges inline */
+      .header-services{flex-direction:column;align-items:flex-start;gap:8px}
+      .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     }
 
     /* Portrait / tall-narrow windows (desktop 9:16) */
@@ -109,6 +112,9 @@
       /* make search input expand and button smaller on tall/narrow screens */
       #useful-card input#cve-search{flex:1;width:auto !important}
       #useful-card button#cve-search-btn{flex:0 0 110px;padding:8px 10px;font-size:0.95rem}
+      /* stack Services label above badges on tall/narrow screens, keep badges inline */
+      .header-services{flex-direction:column;align-items:flex-start;gap:8px}
+      .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     }
 
     /* Wide landscape (16:9 and wider) adjustments */
@@ -208,11 +214,13 @@
         <div class="logo"><i data-feather="cloud" style="vertical-align:middle"></i></div>
         <div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div>
       </div>
-    <div style="display:flex;gap:12px;align-items:center">
-      <div style="font-size:0.95em;color:var(--muted);margin-right:6px"><span aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-right:6px"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="14" viewBox="0 0 16 11" role="img"><rect width="16" height="11" fill="#006aa7"/><rect x="5" width="6" height="11" fill="#fecc00"/><rect y="4" width="16" height="3" fill="#fecc00"/></svg></span>Services:</div>
-      <div id="svc-cloudflare" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Cloudflare</div></div>
-      <div id="svc-aws" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">AWS</div></div>
-      <div id="svc-microsoft" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Microsoft</div></div>
+    <div class="header-services" style="display:flex;gap:12px;align-items:center">
+      <div class="services-label" style="font-size:0.95em;color:var(--muted);margin-right:6px"><span aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-right:6px"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="14" viewBox="0 0 16 11" role="img"><rect width="16" height="11" fill="#006aa7"/><rect x="5" width="6" height="11" fill="#fecc00"/><rect y="4" width="16" height="3" fill="#fecc00"/></svg></span>Services:</div>
+      <div class="service-badges" style="display:flex;gap:8px;align-items:center">
+        <div id="svc-cloudflare" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Cloudflare</div></div>
+        <div id="svc-aws" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">AWS</div></div>
+        <div id="svc-microsoft" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Microsoft</div></div>
+      </div>
     </div>
   </header>
 
