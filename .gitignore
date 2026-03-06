@@ -1,0 +1,5 @@
+node_modules/
+cves_store.json
+cve_history.json
+uptime_history.json
+*.log

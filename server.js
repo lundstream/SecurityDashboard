@@ -17,8 +17,126 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 const CIRCL_LAST = 'https://cve.circl.lu/api/last';
+const CVE_STORE_FILE = path.join(__dirname, 'cves_store.json');
+const CVE_POLL_INTERVAL = 60 * 60 * 1000; // 1 hour
+const CVE_MAX_AGE_DAYS = 30;
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// --- Persistent CVE store ---
+let _cveStore = []; // in-memory array of CVE items
+
+function extractItemDate(it) {
+  const raw = it.Published || it.published
+    || (it.cveMetadata && (it.cveMetadata.datePublished || it.cveMetadata.dateUpdated))
+    || (it.document && it.document.tracking && (it.document.tracking.current_release_date || it.document.tracking.initial_release_date))
+    || null;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function extractItemId(it) {
+  if (it.cveMetadata && it.cveMetadata.cveId) return it.cveMetadata.cveId.toUpperCase();
+  try {
+    if (Array.isArray(it.aliases)) {
+      for (const a of it.aliases) {
+        const m = String(a).match(/CVE-\d{4}-\d{4,7}/i);
+        if (m) return m[0].toUpperCase();
+      }
+    }
+  } catch (_) {}
+  try {
+    const s = JSON.stringify(it);
+    const m = s.match(/CVE-\d{4}-\d{4,7}/i);
+    if (m) return m[0].toUpperCase();
+  } catch (_) {}
+  const raw = it.id || it.CVE || it.cve || '';
+  if (raw) {
+    const m = String(raw).match(/CVE-\d{4}-\d{4,7}/i);
+    if (m) return m[0].toUpperCase();
+  }
+  return it.id || '';
+}
+
+async function loadCveStore() {
+  try {
+    const raw = await fs.readFile(CVE_STORE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) { _cveStore = parsed; return; }
+  } catch (_) {}
+  _cveStore = [];
+}
+
+async function saveCveStore() {
+  try {
+    await fs.writeFile(CVE_STORE_FILE, JSON.stringify(_cveStore), 'utf8');
+  } catch (e) { console.error('saveCveStore error:', e && e.message); }
+}
+
+function purgeCveStore() {
+  const cutoff = Date.now() - CVE_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const before = _cveStore.length;
+  _cveStore = _cveStore.filter(it => {
+    const d = extractItemDate(it);
+    return d && d.getTime() >= cutoff;
+  });
+  if (_cveStore.length < before) {
+    console.log(`Purged ${before - _cveStore.length} CVEs older than ${CVE_MAX_AGE_DAYS} days (${_cveStore.length} remaining)`);
+  }
+}
+
+async function pollCves() {
+  try {
+    const r = await fetch(CIRCL_LAST);
+    let data = await r.json();
+    if (!Array.isArray(data)) {
+      if (data && Array.isArray(data.value)) data = data.value;
+      else { console.error('pollCves: unexpected response'); return; }
+    }
+    // find the newest date already in the store
+    let newestDate = null;
+    for (const it of _cveStore) {
+      const d = extractItemDate(it);
+      if (d && (!newestDate || d > newestDate)) newestDate = d;
+    }
+    // build set of existing IDs for fast dedup
+    const existing = new Set(_cveStore.map(it => extractItemId(it)).filter(Boolean));
+    let added = 0;
+    for (const it of data) {
+      const id = extractItemId(it);
+      if (id && existing.has(id)) continue;
+      // skip items older than or equal to newest stored date
+      if (newestDate) {
+        const d = extractItemDate(it);
+        if (d && d <= newestDate) continue;
+      }
+      _cveStore.push(it);
+      if (id) existing.add(id);
+      added++;
+    }
+    // purge old entries
+    purgeCveStore();
+    // sort newest first
+    _cveStore.sort((a, b) => {
+      const da = extractItemDate(a) || new Date(0);
+      const db = extractItemDate(b) || new Date(0);
+      return db - da;
+    });
+    await saveCveStore();
+    console.log(`pollCves: fetched ${data.length}, added ${added} new (newer than ${newestDate ? newestDate.toISOString() : 'none'}), store has ${_cveStore.length} CVEs`);
+  } catch (e) {
+    console.error('pollCves error:', e && e.message);
+  }
+}
+
+// Start CVE store: load from disk, poll immediately, then every 10 min
+(async () => {
+  await loadCveStore();
+  console.log(`CVE store loaded: ${_cveStore.length} items from disk`);
+  await pollCves();
+  setInterval(pollCves, CVE_POLL_INTERVAL);
+})();
 
 if (!global._uptimeHistory) global._uptimeHistory = [];
 
@@ -110,27 +228,12 @@ app.get('/api/zero-days', async (req, res) => {
   }
 });
 
-// Latest CVE items (proxy CIRCL /api/last) — used by the frontend
-app.get('/api/cves', async (req, res) => {
+// Latest CVE items — served from persistent local store
+app.get('/api/cves', (req, res) => {
   const count = parseInt(req.query.count || '50', 10);
   const offset = parseInt(req.query.offset || '0', 10);
-  try {
-    const r = await fetch(CIRCL_LAST);
-    let data = await r.json();
-    if (!Array.isArray(data)) {
-      if (data && Array.isArray(data.value)) data = data.value;
-      else return res.status(502).json({ error: 'unexpected response' });
-    }
-    // sort newest first by published date
-    data.sort((a, b) => {
-      const da = new Date(a.Published || a.published || (a.cveMetadata && a.cveMetadata.datePublished) || 0);
-      const db = new Date(b.Published || b.published || (b.cveMetadata && b.cveMetadata.datePublished) || 0);
-      return db - da;
-    });
-    res.json(data.slice(offset, offset + count));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  // _cveStore is already sorted newest-first by pollCves()
+  res.json(_cveStore.slice(offset, offset + count));
 });
 
 app.get('/api/status', async (req, res) => {
