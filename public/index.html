@@ -53,21 +53,28 @@
     /* Mobile optimizations */
     @media (max-width:600px), (max-height:700px) {
       header{flex-direction:column;align-items:flex-start;gap:10px}
-      .logo{width:48px;height:48px;border-radius:8px}
-      .site-title{font-size:1.05rem}
+      .logo{width:40px;height:40px;border-radius:8px}
+      .site-title{font-size:1rem}
       .container{gap:12px}
       .card{padding:10px;border-radius:8px}
-      .list-scroll{height:40vh}
+      .list-scroll{height:40vh;padding-bottom:18px}
       #useful-card .cve-search, input#cve-search{width:100%}
       input#cve-search{width:100% !important;max-width:100%;box-sizing:border-box}
       #cve-search-btn{width:100%;display:block;margin-top:8px}
       .filter-select{width:100%}
       .cvss-dropdown-menu{left:0;right:auto;min-width:140px}
-      .chart-panel{min-height:140px}
+      .chart-panel{min-height:120px}
       .footer-github{font-size:0.9rem}
       /* stack the three top info cards on narrow or short screens */
       .top-panels{flex-direction:column}
       .top-panels > .card{width:100%;margin-bottom:12px}
+      /* prevent fixed footer from overlapping content on small screens */
+      #site-footer{position:static;left:auto;transform:none;bottom:auto;padding:12px 0;margin-top:12px}
+      /* ensure header and panels have breathing room */
+      .top-panels{margin-top:8px}
+      header{margin-bottom:8px}
+      /* slightly reduce logo svg size for balance */
+      .logo svg.feather, .logo i { height:1.2em !important; width:1.2em !important; }
     }
     /* chart panel styling */
     .chart-panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.02));border:1px solid rgba(255,255,255,0.03);position:relative;overflow:hidden;min-height:100px}
