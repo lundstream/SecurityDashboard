@@ -79,7 +79,9 @@
       .header-services{flex-direction:column;align-items:flex-start;gap:8px}
       .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
       /* ensure there is extra space below footer on small screens */
-      body{padding-bottom:22px}
+      body{padding-bottom:48px}
+      /* show footer spacer under the footer text for added gap */
+      .footer-spacer{display:block;height:22px;width:100%}
     }
 
     /* Portrait / tall-narrow windows (desktop 9:16) */
@@ -118,7 +120,9 @@
       .header-services{flex-direction:column;align-items:flex-start;gap:8px}
       .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
       /* add breathing room under footer for portrait/tall windows */
-      body{padding-bottom:28px}
+      body{padding-bottom:72px}
+      /* larger spacer on tall/portrait windows */
+      .footer-spacer{display:block;height:40px;width:100%}
     }
 
     /* Wide landscape (16:9 and wider) adjustments */
@@ -209,6 +213,8 @@
     @media (min-width:901px) {
       #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:9px}
     }
+    /* footer spacer (hidden by default, shown on small/portrait screens) */
+    .footer-spacer{display:none}
   </style>
 </head>
 <body>
@@ -312,6 +318,7 @@
       <span>Security dashboard on GitHub</span>
     </a>
     <span>© 2026 lundstream.net, all rights reserved.</span>
+    <div class="footer-spacer" aria-hidden="true"></div>
   </div>
 </body>
 </html>
