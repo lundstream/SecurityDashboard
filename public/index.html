@@ -18,12 +18,14 @@
       --accent-purple:#8400ff;
       --card-bg:rgba(47, 0, 59, 0.726);
       --muted:rgba(255,255,255,0.6);
+      --header-height:72px;
+      --footer-height:56px;
     }
     html,body{height:100%}
     body{
-      margin:20px;font-family:geist-sans,Inter,Arial,Helvetica,sans-serif;color:#efe8ff;
+      margin:0;font-family:geist-sans,Inter,Arial,Helvetica,sans-serif;color:#efe8ff;
       background:linear-gradient(135deg,var(--bg-1) 0%, var(--bg-2) 40%, #1b0033 60%);
-      position:relative;overflow-y:auto;min-height:100vh;background-attachment:fixed;
+      overflow:hidden;height:100vh;background-attachment:fixed;
     }
     /* honeycomb overlay using SVG data URI */
     body::before{
@@ -31,15 +33,15 @@
       background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='173' viewBox='0 0 200 173'><defs><pattern id='h' width='40' height='34' patternUnits='userSpaceOnUse'><polygon points='20,0 40,10 40,24 20,34 0,24 0,10' fill='%23ffffff' opacity='0.06'/></pattern></defs><rect width='100%25' height='100%25' fill='url(%23h)'/></svg>");
       background-repeat:repeat;mix-blend-mode:overlay;filter:blur(0.4px) saturate(120%);
     }
-    header{position:relative;z-index:2;margin-bottom:14px}
+    header{position:fixed;top:0;left:0;right:0;z-index:125;background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);padding:13px 20px;box-sizing:border-box;display:flex;align-items:center}
     h1,h2,h3{margin:0;font-family:geist-mono,Inter,sans-serif;font-weight:700}
     .card{background:var(--card-bg);border:1px solid rgba(255,255,255,0.06);padding:12px;margin:10px 0;border-radius:10px;box-shadow:0 6px 18px rgba(11,3,28,0.45)}
     .meta{color:var(--muted);font-size:0.9em}
     .tag{display:inline-block;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#fff;padding:4px 8px;border-radius:999px;margin-left:8px;font-size:0.8em}
-    .container{display:flex;gap:20px;align-items:flex-start}
-    .left{flex:1}
-    .right{flex:1;max-width:none}
-    .list-scroll{height:60vh;overflow:auto;padding-right:6px}
+    .container{display:flex;gap:20px;flex:1;min-height:0}
+    .left{flex:1;display:flex;flex-direction:column;min-height:0}
+    .right{flex:1;max-width:none;display:flex;flex-direction:column;min-height:0}
+    .list-scroll{flex:1;overflow:auto;padding-right:6px;box-sizing:border-box;min-height:0}
     .list-footer{background:transparent}
     button{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));border:none;color:#111;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:600}
     button[disabled]{opacity:0.6;cursor:not-allowed}
@@ -49,7 +51,7 @@
     .status-item{display:flex;align-items:center;gap:8px;background:rgba(47, 0, 59, 0.904);padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.03)}
     .status-item:hover{box-shadow:0 10px 26px rgba(25,6,60,0.5);background:rgba(255, 255, 255, 0.021)}
     .status-item span.dot{width:12px;height:12px;border-radius:50%;background:#999;display:inline-block;box-shadow:0 0 6px rgba(0,0,0,0.4)}
-    @media(max-width:900px){.container{flex-direction:column}.list-scroll{height:50vh}}
+    @media(max-width:900px){.container{flex-direction:column}}
     /* Mobile optimizations */
     @media (max-width:600px), (max-height:700px) {
       header{flex-direction:column;align-items:flex-start;gap:10px}
@@ -57,7 +59,7 @@
       .site-title{font-size:1rem}
       .container{gap:12px}
       .card{padding:10px;border-radius:8px}
-      .list-scroll{height:40vh;padding-bottom:18px}
+      .list-scroll{padding-bottom:18px}
       #useful-card .cve-search, input#cve-search{width:100%}
       input#cve-search{width:100% !important;max-width:100%;box-sizing:border-box}
       #cve-search-btn{width:100%;display:block;margin-top:8px}
@@ -68,8 +70,8 @@
       /* stack the three top info cards on narrow or short screens */
       .top-panels{flex-direction:column}
       .top-panels > .card{width:100%;margin-bottom:12px}
-      /* prevent fixed footer from overlapping content on small screens */
-      #site-footer{position:static;left:auto;transform:none;bottom:auto;padding:12px 0;margin-top:12px}
+      /* keep footer fixed on small screens so it's always visible */
+      /* (no static override) */
       /* ensure header and panels have breathing room */
       .top-panels{margin-top:8px}
       header{margin-bottom:8px}
@@ -78,12 +80,8 @@
       /* stack Services label above badges on small screens, keep badges inline */
       .header-services{flex-direction:column;align-items:flex-start;gap:8px}
       .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-      /* ensure there is extra space below footer on small screens (minimal) */
-      body{padding-bottom:8px}
       /* small space above GitHub link on small screens */
       .footer-github{margin-top:2px}
-      /* small footer spacer under the footer text */
-      .footer-spacer{display:block;height:4px;width:100%}
       /* add small bottom gap under copyright on small screens */
       .copyright{display:block;margin-bottom:8px}
     }
@@ -111,11 +109,11 @@
       #useful-card input#cve-search{width:100% !important}
       #useful-card button#cve-search-btn{width:100%}
 
-      /* Avoid footer overlay */
-      #site-footer{position:static;left:auto;transform:none;bottom:auto;margin-top:18px}
+      /* Avoid footer overlay: handled by JS padding; keep footer fixed */
+      /* (no static override) */
 
       /* Slightly reduce heavy shadows and spacing to breathe */
-      body{margin:10px}
+      body{margin:0}
       .card{margin:8px 0}
       /* make search input expand and button smaller on tall/narrow screens */
       #useful-card input#cve-search{flex:1;width:auto !important}
@@ -123,10 +121,6 @@
       /* stack Services label above badges on tall/narrow screens, keep badges inline */
       .header-services{flex-direction:column;align-items:flex-start;gap:8px}
       .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-      /* add breathing room under footer for portrait/tall windows (reduced) */
-      body{padding-bottom:12px}
-      /* modest spacer on tall/portrait windows */
-      .footer-spacer{display:block;height:6px;width:100%}
       /* modest space above GitHub link for portrait/tall windows */
       .footer-github{margin-top:4px}
       /* larger bottom gap under copyright for portrait/tall windows */
@@ -144,11 +138,10 @@
       /* slightly increase spacing between columns */
       .container{gap:24px}
       /* align footer gap on wide 16:9 screens with portrait (9:16) spacing */
-      #site-footer{bottom:12px}
+      /* keep footer flush with the viewport bottom on all sizes */
+      #site-footer{bottom:0}
       .footer-github{margin-top:4px}
-      .footer-spacer{display:block;height:6px;width:100%}
-      /* increase list heights on wide screens so lists reach closer to footer */
-      .list-scroll{height:calc(100vh - 340px)}
+      /* lists fill remaining space automatically */
     }
     /* chart panel styling */
     .chart-panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.02));border:1px solid rgba(255,255,255,0.03);position:relative;overflow:hidden;min-height:100px}
@@ -221,21 +214,17 @@
     /* smaller gap for footer github link and slightly smaller icon */
     .footer-github{display:inline-flex;align-items:center;gap:4px}
     .footer-github svg.feather{margin-right:4px;transform:translateY(-0.08em);height:0.95em;width:0.95em}
-    /* site footer: fixed at bottom center on all screens; JS will add page padding to avoid overlap */
-    #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;color:rgba(255, 255, 255, 0.418);font-size:0.95rem;z-index:120;display:flex;flex-direction:column;gap:6px;align-items:center;padding:8px 12px}
-    @media (min-width:901px) {
-      /* keep same placement for wide screens */
-      #site-footer{bottom:12px}
-      .footer-github{margin-top:4px}
-      .footer-spacer{display:block;height:6px;width:100%}
-    }
-    /* footer spacer (hidden by default, shown on small/portrait screens) */
+    /* site footer: always fixed at bottom, auto-height, opaque */
+    #site-footer{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);color:rgba(255,255,255,0.92);font-size:0.85rem;z-index:120;padding:15px 0 11px;pointer-events:auto;box-sizing:border-box}
+    .footer-inner{max-width:1100px;width:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 12px;box-sizing:border-box}
     .footer-spacer{display:none}
+    #main-content{position:fixed;top:var(--header-height);bottom:var(--footer-height);left:0;right:0;display:flex;flex-direction:column;padding:8px 20px;box-sizing:border-box;overflow:hidden}
+    .top-panels{flex-shrink:0}
   </style>
 </head>
 <body>
   <!-- Header -->
-  <header style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <header style="display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:10px">
         <div class="logo"><i data-feather="cloud" style="vertical-align:middle"></i></div>
         <div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div>
@@ -249,9 +238,9 @@
       </div>
     </div>
   </header>
-
-  <!-- Info panels row -->
-  <section class="top-panels" style="display:flex;gap:16px;margin-bottom:16px">
+    <!-- Info panels row -->
+    <main id="main-content">
+    <section class="top-panels" style="display:flex;gap:16px;margin-bottom:16px">
     <div class="card" style="flex:1;padding:10px;border-radius:6px;">
       <div style="font-weight:600;margin-bottom:6px">Uptime for lundstream.net:</div>
       <div id="uptime-chart" class="chart-panel" style="height:120px;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
@@ -314,6 +303,7 @@
       </div>
     </div>
   </div>
+  </div>
 
   <script src="/app.js"></script>
   <script>
@@ -328,70 +318,31 @@
       tryReplace();
     });
   </script>
+  </main>
+
   <div id="site-footer" aria-hidden="true">
-    <a class="footer-github" href="https://github.com/lundstream/SecurityDashboard" target="_blank" rel="noopener" style="color:rgba(255, 255, 255, 0.788);text-decoration:none">
-      <i data-feather="github" style="vertical-align:middle"></i>
-      <span>Security dashboard on GitHub</span>
-    </a>
-    <span class="copyright">© 2026 lundstream.net, all rights reserved.</span>
-    <div class="footer-spacer" aria-hidden="true"></div>
+    <div class="footer-inner">
+      <a class="footer-github" href="https://github.com/lundstream/SecurityDashboard" target="_blank" rel="noopener" style="color:rgba(255, 255, 255, 0.788);text-decoration:none">
+        <i data-feather="github" style="vertical-align:middle"></i>
+        <span>Security dashboard on GitHub</span>
+      </a>
+      <span class="copyright">© 2026 lundstream.net, all rights reserved.</span>
+    </div>
   </div>
-</div>
+
 
   <script>
+    /* Measure actual header/footer after render and publish as CSS vars
+       so body padding always matches. */
     (function(){
-      let resizeTimer = null;
-      function adjustListHeights(){
-        const header = document.querySelector('header');
-        const topPanels = document.querySelector('.top-panels');
-        const footer = document.getElementById('site-footer');
-        const lists = document.querySelectorAll('.list-scroll');
-        const gapBuffer = 12; // small breathing room
-        const headerH = header ? header.getBoundingClientRect().height : 0;
-        const topH = topPanels ? topPanels.getBoundingClientRect().height : 0;
-        const footerH = footer ? footer.getBoundingClientRect().height : 0;
-
-        // If page content is taller than the viewport, keep footer in document flow (static)
-        const contentHeight = document.body.scrollHeight;
-        if(footer){
-          if(contentHeight > window.innerHeight){
-            // footer stays in document flow and spans full width, centered
-            footer.style.position = 'static';
-            footer.style.left = '0';
-            footer.style.transform = 'none';
-            footer.style.bottom = '';
-            footer.style.zIndex = '';
-            footer.style.width = '100%';
-            footer.style.justifyContent = 'center';
-            footer.style.boxSizing = 'border-box';
-            // remove any body padding added for fixed footer
-            document.body.style.paddingBottom = '';
-          } else {
-            // keep footer fixed at bottom and pad the page so it doesn't overlap
-            footer.style.position = 'fixed';
-            footer.style.left = '50%';
-            footer.style.transform = 'translateX(-50%)';
-            footer.style.bottom = '12px';
-            footer.style.zIndex = 120;
-            footer.style.width = 'auto';
-            footer.style.justifyContent = '';
-            const pad = Math.ceil(footerH + gapBuffer);
-            document.body.style.paddingBottom = pad + 'px';
-          }
-        }
-
-        // Compute available list height (subtract footer height only when fixed)
-        const subtractFooter = (footer && getComputedStyle(footer).position === 'fixed') ? footerH + gapBuffer : gapBuffer;
-        const available = Math.max(120, window.innerHeight - headerH - topH - subtractFooter);
-        lists.forEach(l => { l.style.height = available + 'px'; });
+      function measure(){
+        var h=document.querySelector('header');
+        var f=document.getElementById('site-footer');
+        if(h) document.documentElement.style.setProperty('--header-height', h.offsetHeight+'px');
+        if(f) document.documentElement.style.setProperty('--footer-height', f.offsetHeight+'px');
       }
-      function onResize(){
-        if(resizeTimer) clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(adjustListHeights, 120);
-      }
-      window.addEventListener('resize', onResize);
-      window.addEventListener('orientationchange', onResize);
-      document.addEventListener('DOMContentLoaded', function(){ adjustListHeights(); setTimeout(adjustListHeights, 300); });
+      window.addEventListener('resize', function(){clearTimeout(window._mt);window._mt=setTimeout(measure,100)});
+      document.addEventListener('DOMContentLoaded', function(){measure();setTimeout(measure,400);});
     })();
   </script>
 </body>
