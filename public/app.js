@@ -38,14 +38,21 @@ function applyCvssFilterAndRender(){
   const val = (window._cvssFilterValue !== undefined) ? window._cvssFilterValue : (sel ? sel.value : 'all');
   let threshold = NaN;
   if(val !== 'all') threshold = Number(val) || NaN;
-  const filtered = (window._cves || []).filter(it => {
+  // Only show items that have a real CVE-YYYY-NNNN id (skip GHSA-only advisories)
+  const cveOnly = (window._cves || []).filter(it => {
+    const id = extractCveId(it);
+    return id && /^CVE-/i.test(id);
+  });
+  const filtered = cveOnly.filter(it => {
     if(isNaN(threshold)) return true;
     const score = getCvssNumeric(it);
     return !isNaN(score) && score >= threshold;
   });
-  // prefer CVE items that mention resolution/patch/fix; ensure at least 10 shown
-  const display = selectResolutionItems(filtered, 10);
-  container.innerHTML = renderCveItems(display.length ? display : filtered.slice(0, Math.max(10, filtered.length)));
+  if(!filtered.length && !isNaN(threshold)){
+    container.innerHTML = '<div style="color:var(--muted);padding:12px">No CVEs with CVSS ≥ ' + threshold + ' found in current page.</div>';
+    return;
+  }
+  container.innerHTML = renderCveItems(filtered.length ? filtered : cveOnly);
 }
 
 // prefer items that mention resolution/patch/fix/workaround/mitigat and ensure minimum count
@@ -66,37 +73,31 @@ function selectResolutionItems(items, minCount){
   return out;
 }
 
+// Shared helper: extract CVE-YYYY-NNNN id from an item (returns '' if not found)
+function extractCveId(it) {
+  if (!it) return '';
+  if (it.cveMetadata && it.cveMetadata.cveId) return it.cveMetadata.cveId.toUpperCase();
+  // scan full JSON for CVE pattern first
+  try {
+    const s = JSON.stringify(it);
+    const m = s.match(/CVE-\d{4}-\d{4,7}/i);
+    if (m) return m[0].toUpperCase();
+  } catch (e) { /* ignore */ }
+  // check explicit id fields
+  const raw = it.id || it.CVE || it.cve || '';
+  if (raw) {
+    const m2 = String(raw).match(/CVE-\d{4}-\d{4,7}/i);
+    if (m2) return m2[0].toUpperCase();
+  }
+  return '';
+}
+
 // --- Rendering helpers ---
 function renderCveItems(items) {
   if (!items || !items.length) return '';
   function extractId(it) {
-    if (!it) return '';
-    // prefer an explicit cveMetadata.cveId
-    if (it.cveMetadata && it.cveMetadata.cveId) return it.cveMetadata.cveId;
-    // inspect all text for a CVE id first (prefer CVE over GHSA)
-    try {
-      const s = JSON.stringify(it || '');
-      const mCVE = s.match(/CVE-\d{4}-\d{4,7}/i);
-      if (mCVE) return mCVE[0].toUpperCase();
-    } catch (e) { /* ignore JSON errors */ }
-    // if the explicit id field contains a CVE or GHSA, use it
-    if (it.id) {
-      const idStr = String(it.id);
-      const mCVE2 = idStr.match(/CVE-\d{4}-\d{4,7}/i);
-      if (mCVE2) return mCVE2[0].toUpperCase();
-      const mGHSA2 = idStr.match(/GHSA-[\w-]+/i);
-      if (mGHSA2) return mGHSA2[0].toUpperCase();
-      return idStr;
-    }
-    if (it.CVE) return it.CVE;
-    if (it.cve) return it.cve;
-    // last-resort: look for GHSA in the whole object
-    try {
-      const s2 = JSON.stringify(it || '');
-      const mGHSA = s2.match(/GHSA-[\w-]+/i);
-      if (mGHSA) return mGHSA[0].toUpperCase();
-    } catch (e) { /* ignore */ }
-    return '';
+    // always prefer a CVE id; never fall back to GHSA
+    return extractCveId(it);
   }
   function extractTitle(it) {
     if (!it) return '';
