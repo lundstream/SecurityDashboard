@@ -4,6 +4,47 @@ async function fetchJSON(url) {
   return r.json();
 }
 
+// client-side cache of loaded CVEs (pages appended here)
+window._cves = window._cves || [];
+
+function getCvssNumeric(it){
+  if(!it) return NaN;
+  // try common locations for numeric CVSS scores
+  if(typeof it.cvss === 'number') return it.cvss;
+  if(it.cvss && !isNaN(Number(it.cvss))) return Number(it.cvss);
+  if(it.cvss3 && it.cvss3.baseScore) return Number(it.cvss3.baseScore);
+  // NVD v2 style inside containers.adp[*].metrics[*].cvssV3_1.baseScore
+  try{
+    const cont = it.containers || it.containers || null;
+    if(cont && cont.adp && cont.adp.length){
+      for(const a of cont.adp){
+        if(a.metrics && a.metrics.length){
+          for(const m of a.metrics){
+            if(m.cvssV3_1 && m.cvssV3_1.baseScore) return Number(m.cvssV3_1.baseScore);
+            if(m.cvssV3 && m.cvssV3.baseScore) return Number(m.cvssV3.baseScore);
+          }
+        }
+      }
+    }
+  }catch(e){/* ignore */}
+  return NaN;
+}
+
+function applyCvssFilterAndRender(){
+  const sel = document.getElementById('cvss-filter');
+  const container = document.getElementById('cve-items');
+  if(!container) return;
+  const val = sel ? sel.value : 'all';
+  let threshold = NaN;
+  if(val !== 'all') threshold = Number(val) || NaN;
+  const filtered = (window._cves || []).filter(it => {
+    if(isNaN(threshold)) return true;
+    const score = getCvssNumeric(it);
+    return !isNaN(score) && score >= threshold;
+  });
+  container.innerHTML = renderCveItems(filtered);
+}
+
 // --- Rendering helpers ---
 function renderCveItems(items) {
   if (!items || !items.length) return '';
@@ -154,13 +195,16 @@ async function loadCves(offsetArg) {
   if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
   try {
     const cves = await fetchJSON(`/api/cves?count=${cvePageSize}&offset=${offset}`);
-    if (offset === 0) container.innerHTML = '';
-    container.innerHTML += renderCveItems(cves);
-    cveOffset = offset + cves.length;
+    // maintain client-side cache
+    if (offset === 0) window._cves = [];
+    if (Array.isArray(cves)) window._cves = window._cves.concat(cves);
+    cveOffset = offset + (Array.isArray(cves) ? cves.length : 0);
+    // render filtered view
+    applyCvssFilterAndRender();
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Load more';
-      btn.dataset.available = (cves.length === cvePageSize) ? 'true' : 'false';
+      btn.dataset.available = (Array.isArray(cves) && cves.length === cvePageSize) ? 'true' : 'false';
       updateButtonVisibility(document.getElementById('cve-list'), btn);
     }
   } catch (e) {
@@ -204,6 +248,9 @@ function init() {
   fetchAndRenderUptime();
   fetchAndRenderCveStats();
   setupCveSearch();
+  // setup CVSS filter listener
+  const sel = document.getElementById('cvss-filter');
+  if(sel){ sel.addEventListener('change', () => applyCvssFilterAndRender()); }
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

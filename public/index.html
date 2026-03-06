@@ -146,7 +146,18 @@
 
   <div class="container">
     <div class="left">
-      <h1><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px"></i>Latest CVE's</h1>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h1 style="display:flex;align-items:center"><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px"></i>Latest CVE's</h1>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label for="cvss-filter" style="font-size:0.95rem;color:var(--muted);margin-right:6px">Filter:</label>
+          <select id="cvss-filter" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);color:inherit;padding:6px 8px;border-radius:8px">
+            <option value="all">All</option>
+            <option value="7">7+</option>
+            <option value="8">8+</option>
+            <option value="9">9+</option>
+          </select>
+        </div>
+      </div>
       <div id="cve-list" class="list-scroll">
         <div id="cve-items">Loading...</div>
         <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="cve-load-more" style="display:none">Load more CVE's</button></div>
