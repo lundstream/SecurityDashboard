@@ -221,11 +221,11 @@
     /* smaller gap for footer github link and slightly smaller icon */
     .footer-github{display:inline-flex;align-items:center;gap:4px}
     .footer-github svg.feather{margin-right:4px;transform:translateY(-0.08em);height:0.95em;width:0.95em}
-    /* site footer default: static so it doesn't overlay in tall/narrow windows */
-    #site-footer{position:static;left:auto;transform:none;bottom:auto;color:rgba(255, 255, 255, 0.418);font-size:0.95rem;z-index:3;display:flex;flex-direction:column;gap:6px;align-items:center}
-    /* wide screens: show footer fixed at bottom center */
+    /* site footer: fixed at bottom center on all screens; JS will add page padding to avoid overlap */
+    #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;color:rgba(255, 255, 255, 0.418);font-size:0.95rem;z-index:120;display:flex;flex-direction:column;gap:6px;align-items:center;padding:8px 12px}
     @media (min-width:901px) {
-      #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:12px}
+      /* keep same placement for wide screens */
+      #site-footer{bottom:12px}
       .footer-github{margin-top:4px}
       .footer-spacer{display:block;height:6px;width:100%}
     }
@@ -351,7 +351,12 @@
         const topH = topPanels ? topPanels.getBoundingClientRect().height : 0;
         const footerH = footer ? footer.getBoundingClientRect().height : 0;
         const available = Math.max(120, window.innerHeight - headerH - topH - footerH - gapBuffer);
-        lists.forEach(l => { l.style.height = available + 'px'; });
+          lists.forEach(l => { l.style.height = available + 'px'; });
+          // ensure body has bottom padding equal to footer height + small buffer
+          if(footer){
+            const pad = Math.ceil(footerH + gapBuffer);
+            document.body.style.paddingBottom = pad + 'px';
+          }
       }
       function onResize(){
         if(resizeTimer) clearTimeout(resizeTimer);
