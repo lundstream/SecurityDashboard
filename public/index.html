@@ -80,8 +80,12 @@
       .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
       /* ensure there is extra space below footer on small screens */
       body{padding-bottom:48px}
+      /* add space above GitHub link in footer on small screens */
+      .footer-github{margin-top:22px}
       /* show footer spacer under the footer text for added gap */
       .footer-spacer{display:block;height:22px;width:100%}
+      /* add small bottom gap under copyright on small screens */
+      .copyright{display:block;margin-bottom:8px}
     }
 
     /* Portrait / tall-narrow windows (desktop 9:16) */
@@ -123,6 +127,10 @@
       body{padding-bottom:72px}
       /* larger spacer on tall/portrait windows */
       .footer-spacer{display:block;height:40px;width:100%}
+      /* add larger space above GitHub link for portrait/tall windows */
+      .footer-github{margin-top:40px}
+      /* larger bottom gap under copyright for portrait/tall windows */
+      .copyright{display:block;margin-bottom:16px}
     }
 
     /* Wide landscape (16:9 and wider) adjustments */
@@ -317,7 +325,7 @@
       <i data-feather="github" style="vertical-align:middle"></i>
       <span>Security dashboard on GitHub</span>
     </a>
-    <span>© 2026 lundstream.net, all rights reserved.</span>
+    <span class="copyright">© 2026 lundstream.net, all rights reserved.</span>
     <div class="footer-spacer" aria-hidden="true"></div>
   </div>
 </body>
