@@ -1,8 +1,9 @@
 ﻿const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
-const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
+const path = require('path');
 const zlib = require('zlib');
 
 const app = express();
@@ -11,87 +12,54 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const CIRCL_LAST = 'https://cve.circl.lu/api/last';
 
-// Service status cache
-if (!global._serviceCache) global._serviceCache = { status: {}, updated: 0 };
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-// Uptime history for norrmoln.se (hourly samples)
 if (!global._uptimeHistory) global._uptimeHistory = [];
 
-// Seed dummy uptime history for immediate visualization (will be replaced by real pings)
-function seedDummyUptime() {
-  if (Array.isArray(global._uptimeHistory) && global._uptimeHistory.length > 0) return;
-  const now = Date.now();
-  const HOUR = 60 * 60 * 1000;
-  const SAMPLES = 24; // seed 24 hourly samples
-  for (let i = SAMPLES - 1; i >= 0; i--) {
-    const t = new Date(now - i * HOUR).toISOString();
-    const ok = (i % 13 !== 0);
-    global._uptimeHistory.push({ t, ok });
-  }
-}
-
-const SERVICE_CHECK_TTL = 60 * 1000; // 1 minute
-const UPTIME_POLL_INTERVAL = 60 * 60 * 1000; // 1 hour
-
-const services = {
-  cloudflare: 'https://www.cloudflare.com/',
-  aws: 'https://aws.amazon.com/',
-  microsoft: 'https://www.microsoft.com/'
-};
-
-async function checkServices() {
-  const now = Date.now();
-  const cache = global._serviceCache;
-  if (now - cache.updated < SERVICE_CHECK_TTL && cache.status && Object.keys(cache.status).length) return cache.status;
-  const results = {};
-  await Promise.all(Object.keys(services).map(async k => {
-    try {
-      const r = await fetch(services[k], { method: 'HEAD' });
-      results[k] = (r && r.ok) ? 'up' : 'down';
-    } catch (e) { results[k] = 'down'; }
-  }));
-  cache.status = results; cache.updated = Date.now();
-  return results;
-}
-
-// uptime poller: ping norrmoln.se and store timestamp + ok
-async function pollUptime() {
+// Helper: simple HTTP probe with timeout
+async function probeUrl(url, timeout = 5000) {
   try {
     const controller = new AbortController();
-    const to = setTimeout(() => controller.abort(), 10000);
-    const r = await fetch('https://norrmoln.se/', { method: 'HEAD', signal: controller.signal });
-    clearTimeout(to);
-    global._uptimeHistory.push({ t: new Date().toISOString(), ok: !!(r && r.ok) });
+    const id = setTimeout(() => controller.abort(), timeout);
+    const r = await fetch(url, { signal: controller.signal });
+    clearTimeout(id);
+    return { ok: !!r.ok, status: r.status };
   } catch (e) {
-    global._uptimeHistory.push({ t: new Date().toISOString(), ok: false });
+    return { ok: false, status: 0, error: e && e.message };
   }
-  // sliding window: keep last MAX entries, drop oldest when overflowing
-  const MAX = 144;
-  while (global._uptimeHistory.length > MAX) global._uptimeHistory.shift();
 }
 
-// seed dummy data then start polling uptime
-seedDummyUptime();
-pollUptime();
-setInterval(pollUptime, UPTIME_POLL_INTERVAL);
+const UPTIME_FILE = path.join(__dirname, 'uptime_history.json');
 
-
-app.get('/api/cves', async (req, res) => {
-  const count = parseInt(req.query.count || '50', 10);
-  const offset = parseInt(req.query.offset || '0', 10);
+async function saveUptimeHistoryFile(arr) {
   try {
-    const r = await fetch(CIRCL_LAST);
-    let data = await r.json();
-    // CIRCL /api/last sometimes returns an object with `value` array (CSAF) or a plain array
-    if (!Array.isArray(data)) {
-      if (data && Array.isArray(data.value)) data = data.value;
-      else return res.status(502).json({ error: 'unexpected response' });
-    }
-    res.json(data.slice(offset, offset + count));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    await fs.writeFile(UPTIME_FILE, JSON.stringify(arr, null, 2), 'utf8');
+  } catch (e) { console.error('saveUptimeHistoryFile', e && e.message); }
+}
+
+async function loadUptimeHistoryFile() {
+  try {
+    const raw = await fs.readFile(UPTIME_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch (e) {
+    // ignore
   }
-});
+  return null;
+}
+
+// Prefill uptime history (hourly entries) with all-ok entries for past `hours` hours
+async function prefillUptimeHistory(hours = 168) {
+  const now = Date.now();
+  const arr = [];
+  for (let i = hours - 1; i >= 0; i--) {
+    const ts = now - i * 60 * 60 * 1000;
+    arr.push({ ts, ok: true, details: [{ name: 'prefill', ok: true, note: 'prefilled' }] });
+  }
+  await saveUptimeHistoryFile(arr);
+  global._uptimeHistory = arr.slice();
+  return arr;
+}
 
 app.get('/api/zero-days', async (req, res) => {
   const count = parseInt(req.query.count || '200', 10);
@@ -136,6 +104,23 @@ app.get('/api/zero-days', async (req, res) => {
   }
 });
 
+// Latest CVE items (proxy CIRCL /api/last) — used by the frontend
+app.get('/api/cves', async (req, res) => {
+  const count = parseInt(req.query.count || '50', 10);
+  const offset = parseInt(req.query.offset || '0', 10);
+  try {
+    const r = await fetch(CIRCL_LAST);
+    let data = await r.json();
+    if (!Array.isArray(data)) {
+      if (data && Array.isArray(data.value)) data = data.value;
+      else return res.status(502).json({ error: 'unexpected response' });
+    }
+    res.json((data.slice(offset, offset + count)));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/status', async (req, res) => {
   try {
     const st = await checkServices();
@@ -144,6 +129,160 @@ app.get('/api/status', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Basic service checks and uptime history
+async function checkServices() {
+  const now = Date.now();
+  const details = [];
+
+  // CIRCL and NVD probes (keep original checks)
+  const circl = await probeUrl(CIRCL_LAST, 6000);
+  details.push({ name: 'circl_last', ok: circl.ok, status: circl.status });
+  const nvd = await probeUrl('https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1', 6000);
+  details.push({ name: 'nvd_v2', ok: nvd.ok, status: nvd.status });
+
+  // (VPN checked hourly by separate scheduler)
+
+  // Microsoft hosts: ping (HTTP) each host
+  const msHosts = ['https://outlook.office365.com/', 'https://advania-my.sharepoint.com/', 'https://login.microsoftonline.com/', 'https://portal.office.com/'];
+  const msResults = [];
+  for (const h of msHosts) {
+    const r = await probeUrl(h, 4000);
+    // treat client errors (4xx) as reachable — many Microsoft endpoints return 403/401 for anonymous requests
+    const reachable = (r && typeof r.status === 'number') ? (r.status < 500) : !!r.ok;
+    msResults.push({ host: h.replace(/^https?:\/\//, ''), ok: reachable, status: r.status });
+  }
+  const msDown = msResults.filter(x => !x.ok).length;
+  let msColor = 'green';
+  if (msDown === 1) msColor = 'yellow';
+  if (msDown >= 2) msColor = 'red';
+  details.push({ name: 'microsoft', ok: msDown === 0, color: msColor, hosts: msResults });
+
+  // Cloudflare: ping 1.1.1.1 and 1.0.0.1 via HTTPS trace endpoint
+  const cfHosts = ['https://1.1.1.1/cdn-cgi/trace', 'https://1.0.0.1/cdn-cgi/trace'];
+  const cfResults = [];
+  for (const h of cfHosts) {
+    const r = await probeUrl(h, 3000);
+    cfResults.push({ host: h.replace(/^https?:\/\//, ''), ok: r.ok, status: r.status });
+  }
+  const cfDown = cfResults.filter(x => !x.ok).length;
+  let cfColor = 'green';
+  if (cfDown === 1) cfColor = 'yellow';
+  if (cfDown >= 2) cfColor = 'red';
+  details.push({ name: 'cloudflare', ok: cfDown === 0, color: cfColor, hosts: cfResults });
+
+  // AWS: best-effort check by fetching health page
+  let awsOk = false; let awsStatus = 0; let awsText = '';
+  try {
+    const r = await probeUrl('https://status.aws.amazon.com/', 5000);
+    awsOk = !!r.ok;
+    awsStatus = r.status;
+    try {
+      const txt = await fetch('https://status.aws.amazon.com/').then(t => t.text()).catch(()=>'');
+      awsText = txt || '';
+    } catch (e) { awsText = ''; }
+  } catch (e) {}
+  let awsColor = awsOk ? 'green' : 'red';
+  if (awsOk && /operating normally|All Systems Operational/i.test(awsText)) awsColor = 'green';
+  details.push({ name: 'aws', ok: awsOk, color: awsColor, status: awsStatus });
+
+  // overall ok only if core services ok
+  const overall = circl.ok && nvd.ok;
+
+  // store entry
+  global._uptimeHistory = global._uptimeHistory || [];
+  const entry = { ts: now, ok: overall, details };
+  global._uptimeHistory.push(entry);
+  // keep recent 288 entries by default
+  if (global._uptimeHistory.length > 288) global._uptimeHistory.shift();
+  // persist to disk (append/replace last)
+  try {
+    const disk = await loadUptimeHistoryFile();
+    let out = disk && Array.isArray(disk) ? disk.slice() : [];
+    out.push(entry);
+    if (out.length > 288) out = out.slice(-288);
+    await saveUptimeHistoryFile(out);
+  } catch (e) { /* ignore */ }
+
+  return { ok: overall, services: details, historyLength: global._uptimeHistory.length };
+}
+
+// Poll services every 5 minutes to populate uptime history
+setInterval(() => { checkServices().catch(() => {}); }, 5 * 60 * 1000);
+// seed immediately
+checkServices().catch(() => {});
+
+// Ensure uptime file exists; prefill with OK entries if missing
+(async () => {
+  try {
+    const disk = await loadUptimeHistoryFile();
+    if (!disk) {
+      // prefill 720 hours (~30 days hourly)
+      await prefillUptimeHistory(720);
+    } else {
+      global._uptimeHistory = disk.slice();
+    }
+  } catch (e) { console.error('uptime prefill error', e && e.message); }
+
+  // Microsoft hosts check every 10 seconds (fast polling for status color)
+  const checkMicrosoftOnce = async () => {
+    const msHosts = ['https://outlook.office365.com/', 'https://advania-my.sharepoint.com/', 'https://login.microsoftonline.com/', 'https://portal.office.com/'];
+    const msResults = [];
+    for (const h of msHosts) {
+      const r = await probeUrl(h, 3000);
+      const reachable = (r && typeof r.status === 'number') ? (r.status < 500) : !!r.ok;
+      msResults.push({ host: h.replace(/^https?:\/\//, ''), ok: reachable, status: r.status });
+    }
+    const msDown = msResults.filter(x => !x.ok).length;
+    let msColor = 'green'; if (msDown === 1) msColor = 'yellow'; if (msDown >= 2) msColor = 'red';
+    global._serviceSummary = global._serviceSummary || {};
+    global._serviceSummary.microsoft = { ts: Date.now(), color: msColor, hosts: msResults };
+  };
+  checkMicrosoftOnce().catch(() => {});
+  setInterval(() => checkMicrosoftOnce().catch(() => {}), 10 * 1000);
+
+  // VPN hourly (explicit) - update uptime history with vpn result
+  const checkVpnOnce = async () => {
+    try {
+      const r = await probeUrl('https://vpn.lundstream.net/', 8000);
+      const entry = { ts: Date.now(), ok: r.ok, details: [{ name: 'vpn_lundstream', ok: r.ok, status: r.status }] };
+      global._uptimeHistory = global._uptimeHistory || [];
+      global._uptimeHistory.push(entry);
+      if (global._uptimeHistory.length > 288) global._uptimeHistory.shift();
+      // persist
+      try {
+        const disk = await loadUptimeHistoryFile() || [];
+        disk.push(entry);
+        if (disk.length > 288) disk = disk.slice(-288);
+        await saveUptimeHistoryFile(disk);
+      } catch (e) {}
+    } catch (e) {}
+  };
+  // run immediately and hourly
+  checkVpnOnce().catch(() => {});
+  setInterval(() => checkVpnOnce().catch(() => {}), 60 * 60 * 1000);
+
+  // Cloudflare & AWS periodic checks every minute
+  const checkCloudflareAws = async () => {
+    try {
+      // cloudflare
+      const cf1 = await probeUrl('https://1.1.1.1/cdn-cgi/trace', 3000);
+      const cf0 = await probeUrl('https://1.0.0.1/cdn-cgi/trace', 3000);
+      global._serviceSummary = global._serviceSummary || {};
+      const cfDown = [cf1, cf0].filter(x => !x.ok).length;
+      let cfColor = 'green'; if (cfDown === 1) cfColor = 'yellow'; if (cfDown >= 2) cfColor = 'red';
+      global._serviceSummary.cloudflare = { ts: Date.now(), color: cfColor, hosts: [ { host: '1.1.1.1', ok: cf1.ok }, { host: '1.0.0.1', ok: cf0.ok } ] };
+
+      // aws
+      const awsProbe = await probeUrl('https://status.aws.amazon.com/', 5000);
+      let awsColor = awsProbe.ok ? 'green' : 'red';
+      global._serviceSummary.aws = { ts: Date.now(), color: awsColor, ok: awsProbe.ok };
+    } catch (e) { /* ignore */ }
+  };
+  checkCloudflareAws().catch(() => {});
+  setInterval(() => checkCloudflareAws().catch(() => {}), 60 * 1000);
+
+})();
 
 app.get('/api/uptime', async (req, res) => {
   // return uptime history (timestamp + ok) limited to most recent N
@@ -288,6 +427,63 @@ async function updateCveHistoryFromSource() {
   return null;
 }
 
+// Fetch count of CVEs for a single day (YYYY-MM-DD). Prefer NVD v2, fall back to CIRCL parsing.
+async function fetchCountForSingleDay(dayStr) {
+  // build start/end ISO strings
+  const start = new Date(dayStr + 'T00:00:00Z');
+  const end = new Date(dayStr + 'T23:59:59Z');
+  const headers = { 'User-Agent': 'CVE-dashboard/1.0 (https://example)' };
+  if (process.env.NVD_API_KEY) headers['apiKey'] = process.env.NVD_API_KEY;
+  try {
+    const base2 = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
+    const ps = 2000; let startIndex = 0; let totalResults = Infinity; let fetched = 0; let loop = 0; let count = 0;
+    while (fetched < totalResults && loop < 100) {
+      const url = `${base2}?pubStartDate=${encodeURIComponent(start.toISOString())}&pubEndDate=${encodeURIComponent(end.toISOString())}&resultsPerPage=${ps}&startIndex=${startIndex}`;
+      const r = await fetch(url, { headers });
+      if (!r.ok) throw new Error('NVD v2 error ' + r.status);
+      const j = await r.json();
+      const items = (j && j.vulnerabilities) || [];
+      count += items.length;
+      fetched += items.length; startIndex += items.length; loop++;
+      if (items.length === 0) break;
+      await sleep(600);
+    }
+    return count;
+  } catch (e) {
+    // fallback: compute from CIRCL recent feed
+    try {
+      const arr = await computeCveCountsFromSource();
+      const found = (arr || []).find(x => x.date === dayStr);
+      return found ? found.count : 0;
+    } catch (e2) { return 0; }
+  }
+}
+
+// Update only the previous day's count at midnight and persist into cve_history.json
+async function updatePreviousDayCount() {
+  const now = new Date();
+  const prev = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const dayStr = prev.toISOString().slice(0,10);
+  try {
+    const cnt = await fetchCountForSingleDay(dayStr);
+    // read existing history
+    const HIST = path.join(__dirname, 'cve_history.json');
+    let arr = [];
+    try { arr = JSON.parse(await fs.readFile(HIST, 'utf8')); } catch (e) { arr = []; }
+    if (!Array.isArray(arr)) arr = [];
+    // replace or add
+    const idx = arr.findIndex(x => x.date === dayStr);
+    if (idx >= 0) arr[idx].count = cnt; else arr.push({ date: dayStr, count: cnt });
+    // ensure sorted and keep last 90 days max
+    arr = arr.sort((a,b)=> a.date < b.date ? -1 : 1).slice(-90);
+    await saveCveHistory(arr);
+    return { date: dayStr, count: cnt };
+  } catch (e) {
+    console.error('updatePreviousDayCount', e && e.message);
+    throw e;
+  }
+}
+
 // Fetch CVE items from NVD REST API and compute daily counts for last 30 days
 async function fetchCveCountsFromNvd() {
   const base = 'https://services.nvd.nist.gov/rest/json/cves/1.0';
@@ -312,23 +508,88 @@ async function fetchCveCountsFromNvd() {
   const ps = 2000; let startIndex = 0; let totalResults = Infinity; let fetched = 0; let loop = 0;
   const headers = { 'User-Agent': 'CVE-dashboard/1.0 (https://example)' };
   if (process.env.NVD_API_KEY) headers['apiKey'] = process.env.NVD_API_KEY;
-  while (fetched < totalResults && loop < 100) {
-    const url = `${base}?pubStartDate=${encodeURIComponent(nvdDateString(startDate))}&pubEndDate=${encodeURIComponent(nvdDateString(endDate))}&startIndex=${startIndex}&resultsPerPage=${ps}`;
-    const r = await fetch(url, { headers });
-    if (!r.ok) throw new Error('NVD API error '+r.status);
-    const j = await r.json();
-    const items = (j && j.result && j.result.CVE_Items) || [];
-    items.forEach(it => {
-      const pd = it.publishedDate || (it.published && it.publishedDate) || null;
-      if (!pd) return;
-      const day = (new Date(pd)).toISOString().slice(0,10);
-      if (counts.hasOwnProperty(day)) counts[day]++;
-    });
-    totalResults = (j && j.totalResults) || ((j && j.resultsPerPage) ? j.resultsPerPage : items.length);
-    fetched += items.length;
-    startIndex += items.length;
-    loop++;
-    if (items.length === 0) break;
+  // First try NVD v1 REST endpoint. If it returns 403 or fails, fall back to v2.
+  try {
+    while (fetched < totalResults && loop < 100) {
+      const url = `${base}?pubStartDate=${encodeURIComponent(nvdDateString(startDate))}&pubEndDate=${encodeURIComponent(nvdDateString(endDate))}&startIndex=${startIndex}&resultsPerPage=${ps}`;
+      console.log('NVD v1 request:', url);
+      const r = await fetch(url, { headers });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => '<no-body>');
+        console.error('NVD v1 response:', r.status, (txt && txt.slice) ? txt.slice(0,200) : txt);
+        const err = new Error('NVD API error ' + r.status + ' ' + ((txt && txt.slice) ? txt.slice(0,200) : ''));
+        err.status = r.status;
+        throw err;
+      }
+      const j = await r.json();
+      const items = (j && j.result && j.result.CVE_Items) || [];
+      items.forEach(it => {
+        const pd = it.publishedDate || (it.published && it.publishedDate) || null;
+        if (!pd) return;
+        const day = (new Date(pd)).toISOString().slice(0,10);
+        if (counts.hasOwnProperty(day)) counts[day]++;
+      });
+      // be polite to NVD: pause between paged requests (avoid 429/403)
+      await sleep(800);
+      totalResults = (j && j.totalResults) || ((j && j.resultsPerPage) ? j.resultsPerPage : items.length);
+      fetched += items.length;
+      startIndex += items.length;
+      loop++;
+      if (items.length === 0) break;
+    }
+  } catch (v1err) {
+    // If v1 is blocked (403) or otherwise fails, try the v2 API which may accept the key/IP.
+    try {
+      const base2 = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
+      // reset counters for v2 fetch
+      fetched = 0; startIndex = 0; loop = 0; totalResults = Infinity;
+      // Use a simpler v2 query (paged) and filter dates client-side to avoid date-format issues
+      while (fetched < totalResults && loop < 100) {
+        const url = `${base2}?pubStartDate=${encodeURIComponent(startDate.toISOString())}&pubEndDate=${encodeURIComponent(endDate.toISOString())}&resultsPerPage=${ps}&startIndex=${startIndex}`;
+        console.log('NVD v2 request (filtered):', url);
+        const r = await fetch(url, { headers });
+        if (!r.ok) {
+          const txt = await r.text().catch(() => '<no-body>');
+          console.error('NVD v2 response:', r.status, (txt && txt.slice) ? txt.slice(0,200) : txt);
+          throw new Error('NVD v2 API error ' + r.status + ' ' + ((txt && txt.slice) ? txt.slice(0,200) : ''));
+        }
+        const j = await r.json();
+        const items = (j && j.vulnerabilities) || [];
+        console.log('NVD v2 page', loop, 'items', items.length, 'totalResults', j && j.totalResults);
+        items.forEach(it => {
+          // try multiple locations for published date and only count items within our 30-day window
+          const candidates = [];
+          if (it.published) candidates.push(it.published);
+          if (it.publishedDate) candidates.push(it.publishedDate);
+          if (it.cve) {
+            if (it.cve.published) candidates.push(it.cve.published);
+            if (it.cve.publishedDate) candidates.push(it.cve.publishedDate);
+            if (it.cve.lastModifiedDate) candidates.push(it.cve.lastModifiedDate);
+          }
+          let pd = null;
+          for (const c of candidates) {
+            if (!c) continue;
+            const d = new Date(c);
+            if (!isNaN(d.getTime())) { pd = d.toISOString(); break; }
+            const m = (c && c.match && c.match(/(\d{4}-\d{2}-\d{2})/)) || null;
+            if (m) { pd = m[1]; break; }
+          }
+          if (!pd) return;
+          const day = pd.slice(0,10);
+          if (counts.hasOwnProperty(day)) counts[day]++;
+        });
+        // pause between paged requests to avoid hitting rate limits
+        await sleep(800);
+        totalResults = (j && j.totalResults) || ((j && j.resultsPerPage) ? j.resultsPerPage : items.length);
+        fetched += items.length;
+        startIndex += items.length;
+        loop++;
+        if (items.length === 0) break;
+      }
+    } catch (v2err) {
+      // rethrow original or v2 error to be handled by caller
+      throw v2err || v1err;
+    }
   }
   return Object.keys(counts).sort().map(d => ({ date: d, count: counts[d] }));
 }
@@ -369,8 +630,13 @@ async function fetchCveCountsFromNvdFeed() {
   for (const y of years) {
     const url = `https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-${y}.json.gz`;
     try {
+      console.log('NVD feed request:', url);
       const r = await fetch(url, { headers: { 'User-Agent': 'CVE-dashboard/1.0 (https://example)' } });
-      if (!r.ok) { console.warn('NVD feed fetch failed', r.status); continue; }
+      if (!r.ok) {
+        const txt = await r.text().catch(() => '<no-body>');
+        console.warn('NVD feed fetch failed', r.status, (txt && txt.slice) ? txt.slice(0,200) : txt);
+        continue;
+      }
       const buf = Buffer.from(await r.arrayBuffer());
       const out = zlib.gunzipSync(buf).toString('utf8');
       const j = JSON.parse(out);
@@ -395,8 +661,9 @@ function scheduleNightlyUpdate() {
   next.setHours(24,0,0,0);
   const delay = next.getTime() - now.getTime();
   setTimeout(async () => {
-    await updateCveHistoryFromSource();
-    setInterval(updateCveHistoryFromSource, 24 * 60 * 60 * 1000);
+    // At midnight update the previous day's CVE count specifically
+    await updatePreviousDayCount();
+    setInterval(updatePreviousDayCount, 24 * 60 * 60 * 1000);
   }, delay);
 }
 
@@ -497,6 +764,7 @@ app.get('/api/rss', async (req, res) => {
 // Export helpers so external scripts can trigger updates (useful for CLI runs)
 module.exports = {
   updateCveHistoryFromSource,
+  updatePreviousDayCount,
   fetchCveCountsFromNvd,
   fetchCveCountsFromNvdFeed,
   computeCveCountsFromSource

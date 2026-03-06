@@ -15,6 +15,79 @@ function renderCveItems(items) {
     if (it.cve) return it.cve;
     const s = JSON.stringify(it || '');
     const m = s.match(/CVE-\d{4}-\d{4,7}/i);
+// CVE per-day chart: fetch stats or derive from recent CVEs, then render with color thresholds
+async function loadCveChart(){
+  let stats = null;
+  try{
+    stats = await fetchJSON('/api/cve-stats');
+    // expected format: [{date: 'YYYY-MM-DD', count: N}, ...]
+  }catch(e){
+    // fallback: derive from recent CVEs
+    try{
+      const raw = await fetchJSON('/api/cves?count=2000');
+      const map = {};
+      raw.forEach(it=>{
+        const d = (it.Published||it.published||it.PublishedDate||it.publishedDate||'').slice(0,10) || (it.Date || '').slice(0,10);
+        if(!d) return;
+        map[d] = (map[d]||0) + 1;
+      });
+      stats = Object.keys(map).sort().map(d=>({date:d,count:map[d]}));
+    }catch(err){
+      console.warn('Could not load CVE stats or derive from /api/cves:', err);
+      return;
+    }
+  }
+
+  if(!Array.isArray(stats) || stats.length===0) return;
+
+  // limit to last 30 entries if longer
+  const slice = stats.slice(-30);
+  const labels = slice.map(s=>s.date);
+  const data = slice.map(s=>s.count);
+
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+
+  function pickColor(val){
+    if(max===min) return '#7b2cff'; // flat data -> purple
+    const pct = ((val - min) / (max - min)) * 100;
+    if(pct <= 25) return '#7b2cff';
+    if(pct <= 50) return '#9b63ff';
+    if(pct <= 75) return '#d77bff';
+    return '#ff6fb1';
+  }
+
+  const bg = data.map(v=>pickColor(v));
+
+  const ctx = document.getElementById('cve-canvas').getContext('2d');
+  if(window.cveChart) window.cveChart.destroy();
+  window.cveChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: "CVE's per day",
+        data: data,
+        backgroundColor: bg,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+}
+
+// initialize CVE chart (async)
+setTimeout(()=>{ loadCveChart().catch(e=>console.warn(e)); }, 300);
     return m ? m[0].toUpperCase() : '';
   }
   function extractSummary(it) {
@@ -199,20 +272,35 @@ else init();
 // --- header/status/chart helpers ---
 async function fetchAndRenderStatus() {
   try {
-    const s = await fetchJSON('/api/status');
-    [['cloudflare','svc-cloudflare'],['aws','svc-aws'],['microsoft','svc-microsoft']].forEach(([k,id])=>{
+    const res = await fetchJSON('/api/status');
+    // map service name -> entry
+    const map = {};
+    if (Array.isArray(res.services)) {
+      res.services.forEach(s => { if (s && s.name) map[s.name] = s; });
+    }
+    // helper to apply color to header id and make clickable
+    function apply(id, entry, href) {
       const el = document.getElementById(id);
       if (!el) return;
-      const dot = el.querySelector('span');
-      // tolerate several truthy/ok values from the API
-      const val = s && s[k];
-      const up = (val === 'up' || val === 'online' || val === true || val === 'ok');
-      if (dot) {
-        dot.style.backgroundColor = up ? '#2ecc71' : '#e74c3c';
-        dot.style.boxShadow = up ? '0 0 6px rgba(46,204,113,0.35)' : '0 0 6px rgba(231,76,60,0.2)';
-        dot.setAttribute('aria-label', up ? 'up' : 'down');
+      const dot = el.querySelector('span.dot');
+      const label = el.querySelector('div') || el;
+      if (!dot) return;
+      const color = (entry && entry.color) || (entry && entry.ok ? 'green' : 'red');
+      const bg = color === 'green' ? '#2ecc71' : (color === 'yellow' ? '#f9a825' : '#e74c3c');
+      dot.style.backgroundColor = bg;
+      dot.style.boxShadow = color === 'green' ? '0 0 6px rgba(46,204,113,0.35)' : '0 0 6px rgba(231,76,60,0.2)';
+      dot.setAttribute('aria-label', (entry && entry.ok) ? 'up' : 'down');
+      if (label && entry && entry.color) label.title = `${entry.name} ${entry.color}`;
+      // make clickable to official status page
+      if (href) {
+        el.style.cursor = 'pointer';
+        el.onclick = () => window.open(href, '_blank');
       }
-    });
+    }
+    // possible service keys returned: 'cloudflare','aws','microsoft'
+    apply('svc-cloudflare', map['cloudflare'] || map['cloudflare_trace'] || map['1.1.1.1'], 'https://www.cloudflarestatus.com');
+    apply('svc-aws', map['aws'] || map['status.aws'], 'https://health.aws.amazon.com/health/status');
+    apply('svc-microsoft', map['microsoft'] || map['microsoft_o365'], 'https://status.cloud.microsoft');
   } catch (e) { console.error('status', e); }
 }
 
@@ -251,10 +339,14 @@ async function fetchAndRenderUptime(){
     if (!Array.isArray(data) || data.length === 0) {
       const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); return;
     }
-    // prepare labels and values
-    const labels = data.map(d => new Date(d.t).toLocaleString());
-    const values = data.map(d => d.ok ? 1 : 0);
-    const bgColors = data.map(d => d.ok ? 'rgba(126,243,179,0.95)' : 'rgba(255,134,179,0.95)');
+    // limit to last 24 hours (by timestamp) — prefer entries within last 24h
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const recent = data.filter(d => d && d.ts && d.ts >= (Date.now() - DAY_MS));
+    const use = (recent && recent.length) ? recent : data.slice(-24);
+    // prepare labels (short time) and values
+    const labels = use.map(d => new Date(d.ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }));
+    const values = use.map(d => d.ok ? 1 : 0);
+    const bgColors = use.map(d => d.ok ? 'rgba(126,243,179,0.95)' : 'rgba(255,134,179,0.95)');
     // destroy existing chart if present
     if (window.uptimeChart) { window.uptimeChart.destroy(); window.uptimeChart = null; }
     const ctx = canvas.getContext('2d');
@@ -282,6 +374,7 @@ async function fetchAndRenderUptime(){
   } catch (e) { console.error('uptime', e); }
 }
 
+
 async function fetchAndRenderCveStats(){
   try {
     const data = await fetchJSON('/api/cve-stats');
@@ -294,10 +387,23 @@ async function fetchAndRenderCveStats(){
     // destroy existing chart
     if (window.cveChart) { window.cveChart.destroy(); window.cveChart = null; }
     const ctx = document.getElementById('cve-canvas').getContext('2d');
-    const grad = ctx.createLinearGradient(0,0,0,120); grad.addColorStop(0,'#ff6fb1'); grad.addColorStop(1,'#7b2cff');
+
+    // compute color per bar based on value percentile in range
+    const min = Math.min(...counts);
+    const max = Math.max(...counts);
+    function pickColor(val){
+      if (max === min) return '#7b2cff';
+      const pct = ((val - min) / (max - min)) * 100;
+      if (pct <= 25) return '#7b2cff';
+      if (pct <= 50) return '#9b63ff';
+      if (pct <= 75) return '#d77bff';
+      return '#ff6fb1';
+    }
+    const colors = counts.map(v => pickColor(v));
+
     window.cveChart = new Chart(ctx, {
       type: 'bar',
-      data: { labels, datasets: [{ data: counts, backgroundColor: grad, borderRadius:4 }] },
+      data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderRadius:4 }] },
       options: {
         maintainAspectRatio: false,
         plugins: {
