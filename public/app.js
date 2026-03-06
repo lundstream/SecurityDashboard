@@ -43,7 +43,27 @@ function applyCvssFilterAndRender(){
     const score = getCvssNumeric(it);
     return !isNaN(score) && score >= threshold;
   });
-  container.innerHTML = renderCveItems(filtered);
+  // prefer CVE items that mention resolution/patch/fix; ensure at least 10 shown
+  const display = selectResolutionItems(filtered, 10);
+  container.innerHTML = renderCveItems(display.length ? display : filtered.slice(0, Math.max(10, filtered.length)));
+}
+
+// prefer items that mention resolution/patch/fix/workaround/mitigat and ensure minimum count
+function selectResolutionItems(items, minCount){
+  if(!Array.isArray(items) || items.length===0) return [];
+  const re = /\b(patch|patched|fix|fixed|resolve|resolved|resolution|mitigat|mitigated|workaround)\b/i;
+  const matched = [];
+  const others = [];
+  for(const it of items){
+    const s = (typeof it === 'string') ? it : JSON.stringify(it);
+    if(re.test(s)) matched.push(it);
+    else others.push(it);
+  }
+  const out = [];
+  for(const m of matched) { if(out.length>=minCount) break; out.push(m); }
+  let i=0;
+  while(out.length < Math.min(minCount, items.length) && i < others.length){ out.push(others[i++]); }
+  return out;
 }
 
 // --- Rendering helpers ---
@@ -51,16 +71,51 @@ function renderCveItems(items) {
   if (!items || !items.length) return '';
   function extractId(it) {
     if (!it) return '';
+    // prefer an explicit cveMetadata.cveId
     if (it.cveMetadata && it.cveMetadata.cveId) return it.cveMetadata.cveId;
-    if (it.id) return it.id;
+    // inspect all text for a CVE id first (prefer CVE over GHSA)
+    try {
+      const s = JSON.stringify(it || '');
+      const mCVE = s.match(/CVE-\d{4}-\d{4,7}/i);
+      if (mCVE) return mCVE[0].toUpperCase();
+    } catch (e) { /* ignore JSON errors */ }
+    // if the explicit id field contains a CVE or GHSA, use it
+    if (it.id) {
+      const idStr = String(it.id);
+      const mCVE2 = idStr.match(/CVE-\d{4}-\d{4,7}/i);
+      if (mCVE2) return mCVE2[0].toUpperCase();
+      const mGHSA2 = idStr.match(/GHSA-[\w-]+/i);
+      if (mGHSA2) return mGHSA2[0].toUpperCase();
+      return idStr;
+    }
     if (it.CVE) return it.CVE;
     if (it.cve) return it.cve;
-    const s = JSON.stringify(it || '');
-    const mCVE = s.match(/CVE-\d{4}-\d{4,7}/i);
-    if (mCVE) return mCVE[0].toUpperCase();
-    const mGHSA = s.match(/GHSA-[\w-]+/i);
-    if (mGHSA) return mGHSA[0].toUpperCase();
+    // last-resort: look for GHSA in the whole object
+    try {
+      const s2 = JSON.stringify(it || '');
+      const mGHSA = s2.match(/GHSA-[\w-]+/i);
+      if (mGHSA) return mGHSA[0].toUpperCase();
+    } catch (e) { /* ignore */ }
     return '';
+  }
+  function extractTitle(it) {
+    if (!it) return '';
+    if (it.title) return it.title;
+    if (it.summary && it.summary.length && it.summary.length < 140) return it.summary;
+    if (it.cveMetadata && it.cveMetadata.title) return it.cveMetadata.title;
+    if (it.containers && it.containers.cna) {
+      const cna = it.containers.cna;
+      if (cna.title) return cna.title;
+      if (cna.descriptions && cna.descriptions.length) {
+        const d = cna.descriptions[0];
+        return d.title || d.value || d.description || '';
+      }
+    }
+    if (it.document && it.document.title) return it.document.title;
+    // fallback: try to extract a short summary sentence
+    const s = extractSummary(it) || '';
+    const m = s.match(/^(.{20,160}?)(?:[\.!?]\s|$)/);
+    return m ? m[1] : '';
   }
   function extractSummary(it) {
     if (!it) return '';
@@ -100,24 +155,50 @@ function renderCveItems(items) {
     return 'N/A';
   }
   return items.map(it => {
-    const id = extractId(it) || '(no id)';
+    const id = extractId(it) || '';
+    const title = extractTitle(it) || id || '(no id)';
     let url = '#';
-    if (id && id !== '(no id)') {
-      if (id.toUpperCase().startsWith('CVE-')) url = 'https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + encodeURIComponent(id);
-      else if (id.toUpperCase().startsWith('GHSA-')) url = 'https://github.com/advisories/' + encodeURIComponent(id);
-    }
+    if (id && id.toUpperCase().startsWith('CVE-')) url = 'https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + encodeURIComponent(id);
+    else if (id && id.toUpperCase().startsWith('GHSA-')) url = 'https://github.com/advisories/' + encodeURIComponent(id);
+    else if (it && it.url) url = it.url;
     const cvss = extractCvss(it);
     const published = extractPublished(it);
-    const summary = (extractSummary(it) || '(no summary)').replace(/\n/g, ' ');
+    let summary = (extractSummary(it) || '').replace(/\n/g, ' ').trim();
+    // avoid duplicating title when summary begins with the same text
+    if (title && summary) {
+      const tnorm = title.replace(/\s+/g,' ').trim();
+      if (summary.indexOf(tnorm) === 0) {
+        summary = summary.slice(tnorm.length).trim();
+      }
+    }
+    if (!summary) summary = '(no summary)';
     const zeroTag = /\bzero[- ]?day\b|\b0[- ]?day\b|zero\sday/i.test(summary) ? '<span class="tag">Possible Zero-Day</span>' : '';
+    // Render as: ID: Title  (link the ID when present). Fall back to title when no ID.
+    let headHtml = '';
+    if (id) {
+      const idUrl = (id.toUpperCase().startsWith('CVE-')) ? ('https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + encodeURIComponent(id)) : (id.toUpperCase().startsWith('GHSA-') ? ('https://github.com/advisories/' + encodeURIComponent(id)) : url);
+      const safeId = escapeHtml(id);
+      const safeTitle = escapeHtml(title && title !== id ? title : '');
+      headHtml = `<a href="${idUrl}" target="_blank" rel="noopener">${safeId}</a>` + (safeTitle ? (': ' + safeTitle) : '');
+    } else {
+      headHtml = `<a href="${url}" target="_blank" rel="noopener">${escapeHtml(title)}</a>`;
+    }
+    // append zero-day tag after the title
+    const zeroHtml = zeroTag ? (' ' + zeroTag) : '';
     return `
       <div class="card">
-        <div><a href="${url}" target="_blank" rel="noopener">${id}</a>${zeroTag}</div>
+        <div>${headHtml}${zeroHtml}</div>
         <div class="meta">CVSS: ${cvss} • Published: ${published}</div>
-        <div class="desc">${summary}</div>
+        <div class="desc">${escapeHtml(summary)}</div>
       </div>
     `;
   }).join('');
+}
+
+// small helper to escape HTML in title/summary strings
+function escapeHtml(s){
+  if(!s) return '';
+  return String(s).replace(/[&<>\"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; });
 }
 
 function renderNewsItems(items) {
@@ -173,9 +254,20 @@ async function loadNews(offsetArg) {
   if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
   try {
     const news = await fetchJSON(`/api/rss?count=${newsPageSize}&offset=${offset}`);
-    if (offset === 0) container.innerHTML = '';
-    container.innerHTML += renderNewsItems(news);
-    newsOffset = offset + news.length;
+    if (offset === 0) {
+      // prefer resolution-related news; ensure at least 10 items shown
+      const pref = selectResolutionItems(news, 10);
+      if (pref && pref.length) {
+        container.innerHTML = renderNewsItems(pref);
+        newsOffset = pref.length;
+      } else {
+        container.innerHTML = renderNewsItems(news);
+        newsOffset = news.length;
+      }
+    } else {
+      container.innerHTML += renderNewsItems(news);
+      newsOffset = offset + news.length;
+    }
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Load more';

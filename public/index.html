@@ -41,7 +41,11 @@
     .container{display:flex;gap:20px;flex:1;min-height:0}
     .left{flex:1;display:flex;flex-direction:column;min-height:0}
     .right{flex:1;max-width:none;display:flex;flex-direction:column;min-height:0}
-    .list-scroll{flex:1;overflow:auto;padding-right:6px;box-sizing:border-box;min-height:0}
+    .list-scroll{flex:1;overflow:auto;padding-right:6px;box-sizing:border-box;min-height:0;
+      -webkit-overflow-scrolling: touch; /* smooth native scrolling on iOS */
+      overscroll-behavior: contain; /* prevent page scroll bleed */
+      touch-action: auto;
+    }
     .list-footer{background:transparent}
     button{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));border:none;color:#111;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:600}
     button[disabled]{opacity:0.6;cursor:not-allowed}
@@ -51,7 +55,11 @@
     .status-item{display:flex;align-items:center;gap:8px;background:rgba(47, 0, 59, 0.904);padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.03)}
     .status-item:hover{box-shadow:0 10px 26px rgba(25,6,60,0.5);background:rgba(255, 255, 255, 0.021)}
     .status-item span.dot{width:12px;height:12px;border-radius:50%;background:#999;display:inline-block;box-shadow:0 0 6px rgba(0,0,0,0.4)}
-    @media(max-width:900px){.container{flex-direction:column}}
+    @media(max-width:900px){
+      .container{flex-direction:column;flex:none}
+      .left,.right{flex:none}
+      .list-scroll{height:55vh;flex:none}
+    }
     /* Mobile optimizations */
     @media (max-width:600px), (max-height:700px) {
       header{flex-direction:column;align-items:flex-start;gap:10px}
@@ -59,7 +67,7 @@
       .site-title{font-size:1rem}
       .container{gap:12px}
       .card{padding:10px;border-radius:8px}
-      .list-scroll{padding-bottom:18px}
+      .list-scroll{padding-bottom:18px;height:55vh;flex:none}
       #useful-card .cve-search, input#cve-search{width:100%}
       input#cve-search{width:100% !important;max-width:100%;box-sizing:border-box}
       #cve-search-btn{width:100%;display:block;margin-top:8px}
@@ -88,6 +96,9 @@
 
     /* Portrait / tall-narrow windows (desktop 9:16) */
     @media (orientation:portrait), (max-aspect-ratio:9/16) {
+      /* Give each list a tall fixed height for 10+ visible items with internal scroll */
+      .list-scroll{height:55vh;flex:none}
+
       /* Stack the header left area and align items */
       header{flex-direction:column;align-items:flex-start}
       header > div:first-child{display:flex;flex-direction:row;align-items:center;gap:10px}
@@ -97,9 +108,9 @@
       .top-panels{flex-direction:column}
       .top-panels > .card{width:100%;margin-bottom:14px}
 
-      /* Make main columns stack and expand */
-      .container{flex-direction:column}
-      .left, .right{width:100%;max-width:100%}
+      /* Make main columns stack and expand; no shrink so CVEs stays above News */
+      .container{flex-direction:column;flex:none}
+      .left, .right{width:100%;max-width:100%;flex:none}
 
       /* Move filter below heading and make it flow */
       .left > div[style*="display:flex"]{flex-direction:column;align-items:flex-start;gap:10px}
@@ -129,6 +140,8 @@
 
     /* Wide landscape (16:9 and wider) adjustments */
     @media (min-aspect-ratio:16/9) {
+      /* on widescreen both lists fit side-by-side; no page scroll needed */
+      #main-content{overflow:hidden}
       /* keep three top panels in a row */
       .top-panels{flex-direction:row}
       .top-panels > .card{width:auto}
@@ -218,7 +231,7 @@
     #site-footer{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);color:rgba(255,255,255,0.92);font-size:0.85rem;z-index:120;padding:15px 0 11px;pointer-events:auto;box-sizing:border-box}
     .footer-inner{max-width:1100px;width:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 12px;box-sizing:border-box}
     .footer-spacer{display:none}
-    #main-content{position:fixed;top:var(--header-height);bottom:var(--footer-height);left:0;right:0;display:flex;flex-direction:column;padding:8px 20px;box-sizing:border-box;overflow:hidden}
+    #main-content{position:fixed;top:var(--header-height);bottom:var(--footer-height);left:0;right:0;display:flex;flex-direction:column;padding:8px 20px;box-sizing:border-box;overflow-y:auto;overflow-x:hidden}
     .top-panels{flex-shrink:0}
   </style>
 </head>
