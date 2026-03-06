@@ -10,7 +10,8 @@ window._cves = window._cves || [];
 // Parse a CVSS v3 vector string into a numeric base score, or return NaN
 function parseCvssVector(vec) {
   if (!vec || typeof vec !== 'string') return NaN;
-  if (!/^CVSS:3\.[01]\//i.test(vec.trim())) return NaN;
+  // accept CVSS v3.0/v3.1 and v4.0 vector strings
+  if (!/^CVSS:(3\.[01]|4\.0)\//i.test(vec.trim())) return NaN;
   const parts = {};
   for (const seg of vec.trim().split('/').slice(1)) {
     const colon = seg.indexOf(':');
@@ -125,7 +126,17 @@ function selectResolutionItems(items, minCount){
 function extractCveId(it) {
   if (!it) return '';
   if (it.cveMetadata && it.cveMetadata.cveId) return it.cveMetadata.cveId.toUpperCase();
-  // scan full JSON for CVE pattern first
+  // explicit aliases array (OSV/GHSA) may contain CVE identifiers
+  try {
+    if (Array.isArray(it.aliases) && it.aliases.length) {
+      for (const a of it.aliases) {
+        if (!a) continue;
+        const ma = String(a).match(/CVE-\d{4}-\d{4,7}/i);
+        if (ma) return ma[0].toUpperCase();
+      }
+    }
+  } catch (e) { /* ignore */ }
+  // scan full JSON for CVE pattern as a fallback
   try {
     const s = JSON.stringify(it);
     const m = s.match(/CVE-\d{4}-\d{4,7}/i);
