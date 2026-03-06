@@ -232,10 +232,15 @@ function renderNewsItems(items) {
 }
 
 // --- Pagination state ---
-let newsPageSize = 20;
+let newsPageSize = 15;
 let newsOffset = 0;
-let cvePageSize = 20;
+let _newsPreloaded = null;   // background-fetched next batch
+let _newsPreloading = false;
+
+let cvePageSize = 10;
 let cveOffset = 0;
+let _cvePreloaded = null;    // background-fetched next batch
+let _cvePreloading = false;
 
 // helper to update button visibility
 function updateButtonVisibility(container, btn) {
@@ -247,38 +252,64 @@ function updateButtonVisibility(container, btn) {
   else btn.style.display = 'none';
 }
 
+// silently prefetch the next news batch
+async function preloadNews(offset) {
+  if (_newsPreloading || _newsPreloaded !== null) return;
+  _newsPreloading = true;
+  try {
+    const data = await fetchJSON(`/api/rss?count=${newsPageSize}&offset=${offset}`);
+    _newsPreloaded = Array.isArray(data) ? data : [];
+  } catch (e) { _newsPreloaded = []; }
+  _newsPreloading = false;
+}
+
 // load a page of news and append
 async function loadNews(offsetArg) {
   const offset = (typeof offsetArg === 'number') ? offsetArg : newsOffset;
   const btn = document.getElementById('news-load-more');
   const container = document.getElementById('news-items');
   if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
-  try {
-    const news = await fetchJSON(`/api/rss?count=${newsPageSize}&offset=${offset}`);
-    if (offset === 0) {
-      // prefer resolution-related news; ensure at least 10 items shown
-      const pref = selectResolutionItems(news, 10);
-      if (pref && pref.length) {
-        container.innerHTML = renderNewsItems(pref);
-        newsOffset = pref.length;
-      } else {
-        container.innerHTML = renderNewsItems(news);
-        newsOffset = news.length;
-      }
-    } else {
-      container.innerHTML += renderNewsItems(news);
-      newsOffset = offset + news.length;
+  let news;
+  if (offset > 0 && _newsPreloaded !== null) {
+    // use already-prefetched data — instant display
+    news = _newsPreloaded;
+    _newsPreloaded = null;
+  } else {
+    try {
+      news = await fetchJSON(`/api/rss?count=${newsPageSize}&offset=${offset}`);
+    } catch (e) {
+      if (offset === 0) container.innerHTML = 'Error: ' + e.message;
+      if (btn) { btn.disabled = false; btn.textContent = 'Load more'; btn.dataset.available = 'false'; }
+      return;
     }
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Load more';
-      btn.dataset.available = (news.length === newsPageSize) ? 'true' : 'false';
-      updateButtonVisibility(document.getElementById('news-list'), btn);
-    }
-  } catch (e) {
-    container.innerHTML = 'Error: ' + e.message;
-    if (btn) { btn.disabled = false; btn.textContent = 'Load more'; btn.dataset.available = 'false'; }
   }
+  if (offset === 0) {
+    container.innerHTML = renderNewsItems(news);
+  } else {
+    container.innerHTML += renderNewsItems(news);
+  }
+  newsOffset = offset + (Array.isArray(news) ? news.length : 0);
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = 'Load more';
+    btn.dataset.available = (Array.isArray(news) && news.length === newsPageSize) ? 'true' : 'false';
+    updateButtonVisibility(document.getElementById('news-list'), btn);
+  }
+  // kick off background prefetch of the next batch
+  if (Array.isArray(news) && news.length === newsPageSize) {
+    setTimeout(() => preloadNews(newsOffset), 200);
+  }
+}
+
+// silently prefetch the next CVE batch
+async function preloadCves(offset) {
+  if (_cvePreloading || _cvePreloaded !== null) return;
+  _cvePreloading = true;
+  try {
+    const data = await fetchJSON(`/api/cves?count=${cvePageSize}&offset=${offset}`);
+    _cvePreloaded = Array.isArray(data) ? data : [];
+  } catch (e) { _cvePreloaded = []; }
+  _cvePreloading = false;
 }
 
 // load a page of CVEs and append
@@ -287,23 +318,35 @@ async function loadCves(offsetArg) {
   const btn = document.getElementById('cve-load-more');
   const container = document.getElementById('cve-items');
   if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
-  try {
-    const cves = await fetchJSON(`/api/cves?count=${cvePageSize}&offset=${offset}`);
-    // maintain client-side cache
-    if (offset === 0) window._cves = [];
-    if (Array.isArray(cves)) window._cves = window._cves.concat(cves);
-    cveOffset = offset + (Array.isArray(cves) ? cves.length : 0);
-    // render filtered view
-    applyCvssFilterAndRender();
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Load more';
-      btn.dataset.available = (Array.isArray(cves) && cves.length === cvePageSize) ? 'true' : 'false';
-      updateButtonVisibility(document.getElementById('cve-list'), btn);
+  let cves;
+  if (offset > 0 && _cvePreloaded !== null) {
+    // use already-prefetched data — instant display
+    cves = _cvePreloaded;
+    _cvePreloaded = null;
+  } else {
+    try {
+      cves = await fetchJSON(`/api/cves?count=${cvePageSize}&offset=${offset}`);
+    } catch (e) {
+      container.innerHTML = 'Error: ' + e.message;
+      if (btn) { btn.disabled = false; btn.textContent = 'Load more'; btn.dataset.available = 'false'; }
+      return;
     }
-  } catch (e) {
-    container.innerHTML = 'Error: ' + e.message;
-    if (btn) { btn.disabled = false; btn.textContent = 'Load more'; btn.dataset.available = 'false'; }
+  }
+  // maintain client-side cache
+  if (offset === 0) window._cves = [];
+  if (Array.isArray(cves)) window._cves = window._cves.concat(cves);
+  cveOffset = offset + (Array.isArray(cves) ? cves.length : 0);
+  // render filtered view
+  applyCvssFilterAndRender();
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = 'Load more';
+    btn.dataset.available = (Array.isArray(cves) && cves.length === cvePageSize) ? 'true' : 'false';
+    updateButtonVisibility(document.getElementById('cve-list'), btn);
+  }
+  // kick off background prefetch of the next batch
+  if (Array.isArray(cves) && cves.length === cvePageSize) {
+    setTimeout(() => preloadCves(cveOffset), 200);
   }
 }
 

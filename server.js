@@ -115,7 +115,13 @@ app.get('/api/cves', async (req, res) => {
       if (data && Array.isArray(data.value)) data = data.value;
       else return res.status(502).json({ error: 'unexpected response' });
     }
-    res.json((data.slice(offset, offset + count)));
+    // sort newest first by published date
+    data.sort((a, b) => {
+      const da = new Date(a.Published || a.published || (a.cveMetadata && a.cveMetadata.datePublished) || 0);
+      const db = new Date(b.Published || b.published || (b.cveMetadata && b.cveMetadata.datePublished) || 0);
+      return db - da;
+    });
+    res.json(data.slice(offset, offset + count));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
