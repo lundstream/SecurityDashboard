@@ -73,10 +73,23 @@
     /* buttons: single purple and brighter on hover */
     button{background:var(--accent-purple);color:#fff}
     button:hover{filter:brightness(1.18)}
-    .filter-select{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#110428;border:0;padding:6px 8px;border-radius:8px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(123,44,255,0.18)}
-    .filter-select:hover{filter:brightness(1.18)}
-    .filter-select:focus{outline:2px solid rgba(255,255,255,0.06);outline-offset:2px}
-    .filter-select option{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#110428}
+    .filter-select{
+      -webkit-appearance:none;
+      appearance:none;
+      background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));
+      color:#fff;
+      border:0;
+      padding:6px 10px;
+      border-radius:8px;
+      font-weight:600;
+      cursor:pointer;
+      box-shadow:0 6px 20px rgba(123,44,255,0.18);
+      background-repeat:no-repeat;
+      background-position:right 10px center;
+    }
+    .filter-select:hover, .filter-select:focus{filter:brightness(1.18)}
+    .filter-select option{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#fff}
+    .filter-select option:hover, .filter-select option:focus{filter:brightness(1.18);color:#110428}
     /* cards: subtle hover brighten (no movement on hover) */
     /* make hover state immediate and persistent while hovered */
     .card{transition:none}
