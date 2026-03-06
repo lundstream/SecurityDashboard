@@ -76,7 +76,7 @@
     .filter-select{
       -webkit-appearance:none;
       appearance:none;
-      background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));
+      background:var(--accent-purple);
       color:#fff;
       border:0;
       padding:6px 10px;
@@ -87,16 +87,16 @@
       background-repeat:no-repeat;
       background-position:right 10px center;
     }
-    .filter-select:hover, .filter-select:focus{filter:brightness(1.18)}
-    .filter-select option{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#fff}
-    .filter-select option:hover, .filter-select option:focus{filter:brightness(1.18);color:#110428}
+    .filter-select:hover, .filter-select:focus{background:var(--accent-pink);color:#110428}
+    .filter-select option{background:var(--accent-pink);color:#110428}
+    .filter-select option:hover, .filter-select option:focus{background:var(--accent-pink);color:#110428}
     /* custom dropdown menu (replaces native select) */
     .cvss-dropdown{position:relative;display:inline-block}
-    .cvss-dropdown-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:120px;padding:8px;border-radius:10px;list-style:none;margin:0;box-shadow:0 10px 26px rgba(25,6,60,0.45);background:linear-gradient(180deg, rgba(132,0,255,0.95), rgba(255,77,166,0.95));z-index:30;display:none}
+    .cvss-dropdown-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:120px;padding:8px;border-radius:10px;list-style:none;margin:0;box-shadow:0 10px 26px rgba(25,6,60,0.45);background:var(--accent-pink);z-index:30;display:none}
     .cvss-dropdown-menu[aria-hidden="false"]{display:block}
     .cvss-option{padding:8px 10px;border-radius:8px;color:#110428;margin:6px 0;cursor:pointer;font-weight:600}
-    .cvss-option:hover{filter:brightness(1.18);background:rgba(255,255,255,0.08);color:#fff}
-    .cvss-option[aria-selected="true"]{background:rgba(255,255,255,0.06);color:#fff}
+    .cvss-option:hover{background:rgba(255,255,255,0.06);filter:brightness(1.05);color:#110428}
+    .cvss-option[aria-selected="true"]{background:rgba(255,255,255,0.04);color:#110428}
     /* cards: subtle hover brighten (no movement on hover) */
     /* make hover state immediate and persistent while hovered */
     .card{transition:none}
