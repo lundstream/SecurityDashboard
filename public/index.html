@@ -223,7 +223,9 @@
     #site-footer{position:static;left:auto;transform:none;bottom:auto;color:rgba(255, 255, 255, 0.418);font-size:0.95rem;z-index:3;display:flex;flex-direction:column;gap:6px;align-items:center}
     /* wide screens: show footer fixed at bottom center */
     @media (min-width:901px) {
-      #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:4px}
+      #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:12px}
+      .footer-github{margin-top:4px}
+      .footer-spacer{display:block;height:6px;width:100%}
     }
     /* footer spacer (hidden by default, shown on small/portrait screens) */
     .footer-spacer{display:none}
