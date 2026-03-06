@@ -100,11 +100,27 @@ function getCvssNumeric(it){
       }
     }
   }
-  // fallback: database_specific.severity text → approximate numeric
-  if(it.database_specific && it.database_specific.severity){
-    const sev = String(it.database_specific.severity).toUpperCase();
+  // CSAF format: vulnerabilities[*].scores[*].cvss_v3.baseScore
+  try {
+    if (Array.isArray(it.vulnerabilities)) {
+      for (const v of it.vulnerabilities) {
+        if (v && Array.isArray(v.scores)) {
+          for (const sc of v.scores) {
+            if (sc.cvss_v3 && sc.cvss_v3.baseScore) return Number(sc.cvss_v3.baseScore);
+            if (sc.cvss_v4 && sc.cvss_v4.baseScore) return Number(sc.cvss_v4.baseScore);
+          }
+        }
+      }
+    }
+  } catch (e) { /* ignore */ }
+  // fallback: severity text → approximate numeric
+  const sevText = (it.database_specific && it.database_specific.severity)
+    || (it.document && it.document.aggregate_severity && it.document.aggregate_severity.text)
+    || '';
+  if (sevText) {
+    const sev = String(sevText).toUpperCase();
     if(sev === 'CRITICAL') return 9.0;
-    if(sev === 'HIGH')     return 7.5;
+    if(sev === 'HIGH' || sev === 'IMPORTANT') return 7.5;
     if(sev === 'MEDIUM' || sev === 'MODERATE') return 5.0;
     if(sev === 'LOW')      return 2.0;
   }
@@ -211,8 +227,9 @@ function renderCveItems(items) {
   }
   function extractSummary(it) {
     if (!it) return '';
-    if (it.summary) return it.summary;
+    if (it.details) return it.details;
     if (it.description) return it.description;
+    if (it.summary) return it.summary;
     if (it.containers && it.containers.cna) {
       const cna = it.containers.cna;
       if (cna.descriptions && cna.descriptions.length) {
@@ -229,7 +246,7 @@ function renderCveItems(items) {
     return '';
   }
   function extractPublished(it) {
-    const p = it.Published || it.published || (it.cveMetadata && it.cveMetadata.datePublished) || (it.cveMetadata && it.cveMetadata.dateUpdated) || null;
+    const p = it.Published || it.published || (it.cveMetadata && it.cveMetadata.datePublished) || (it.cveMetadata && it.cveMetadata.dateUpdated) || (it.document && it.document.tracking && (it.document.tracking.current_release_date || it.document.tracking.initial_release_date)) || null;
     if (!p) return 'N/A';
     const d = new Date(p);
     if (!isNaN(d.getTime())) return d.toLocaleString();
