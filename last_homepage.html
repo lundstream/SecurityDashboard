@@ -1,0 +1,158 @@
+﻿<!doctype html>
+<html lang= en>
+<head>
+  <meta charset=utf-8 />
+  <meta name=viewport content=width=device-width,initial-scale=1 />
+  <title>Security dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg-1:#0f0620;
+      --bg-2:#2c0038;
+      --accent-pink:#ff4da6;
+      --accent-purple:#7b2cff;
+      --card-bg:rgba(255,255,255,0.03);
+      --muted:rgba(255,255,255,0.6);
+    }
+    html,body{height:100%}
+    body{
+      margin:20px;font-family:geist-sans,Inter,Arial,Helvetica,sans-serif;color:#efe8ff;
+      background:linear-gradient(135deg,var(--bg-1) 0%, var(--bg-2) 40%, #1b0033 60%);
+      position:relative;overflow-y:auto;min-height:100vh;background-attachment:fixed;
+    }
+    /* honeycomb overlay using SVG data URI */
+    body::before{
+      content:"";position:fixed;inset:0;opacity:0.08;pointer-events:none;z-index:0;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='173' viewBox='0 0 200 173'><defs><pattern id='h' width='40' height='34' patternUnits='userSpaceOnUse'><polygon points='20,0 40,10 40,24 20,34 0,24 0,10' fill='%23ffffff' opacity='0.06'/></pattern></defs><rect width='100%25' height='100%25' fill='url(%23h)'/></svg>");
+      background-repeat:repeat;mix-blend-mode:overlay;filter:blur(0.4px) saturate(120%);
+    }
+    header{position:relative;z-index:2;margin-bottom:14px}
+    h1,h2,h3{margin:0;font-family:geist-mono,Inter,sans-serif;font-weight:700}
+    .card{background:var(--card-bg);border:1px solid rgba(255,255,255,0.06);padding:12px;margin:10px 0;border-radius:10px;box-shadow:0 6px 18px rgba(11,3,28,0.45)}
+    .meta{color:var(--muted);font-size:0.9em}
+    .tag{display:inline-block;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#fff;padding:4px 8px;border-radius:999px;margin-left:8px;font-size:0.8em}
+    .container{display:flex;gap:20px;align-items:flex-start}
+    .left{flex:1}
+    .right{flex:1;max-width:none}
+    .list-scroll{height:60vh;overflow:auto;padding-right:6px}
+    .list-footer{background:transparent}
+    button{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));border:none;color:#111;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:600}
+    button[disabled]{opacity:0.6;cursor:not-allowed}
+    /* header layout */
+    .site-title{font-family:geist-mono,Orbitron,Inter,Arial;font-weight:700;color:#fff}
+    .logo{width:56px;height:56px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#111;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));box-shadow:0 6px 20px rgba(123,44,255,0.18)}
+    .status-item{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.02);padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.03)}
+    .status-item span.dot{width:12px;height:12px;border-radius:50%;background:#999;display:inline-block;box-shadow:0 0 6px rgba(0,0,0,0.4)}
+    @media(max-width:900px){.container{flex-direction:column}.list-scroll{height:50vh}}
+    /* chart panel styling */
+    .chart-panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.02));border:1px solid rgba(255,255,255,0.03);position:relative;overflow:hidden;min-height:100px}
+    .chart-panel canvas{width:100% !important;height:100% !important;display:block}
+    .chart-grid{position:absolute;inset:8px 8px 8px 8px;pointer-events:none}
+    /* tooltip */
+    #chart-tooltip{position:fixed;padding:8px 10px;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#110428;border-radius:6px;font-size:13px;pointer-events:none;transform:translate(-50%,-120%);white-space:nowrap;z-index:9999;box-shadow:0 10px 30px rgba(11,3,28,0.6);opacity:0;transition:opacity 160ms ease}
+    /* custom scrollbars for lists (translucent purple) */
+    .list-scroll{scrollbar-color: rgba(120, 41, 255, 0.35) transparent}
+    .list-scroll::-webkit-scrollbar{width:10px;height:10px}
+    .list-scroll::-webkit-scrollbar-track{background:transparent}
+    .list-scroll::-webkit-scrollbar-thumb{background:rgba(123,44,255,0.35);border-radius:10px;border:2px solid rgba(0,0,0,0.08)}
+    /* remove bullets from useful links (legacy) */
+    #useful-links{list-style:none;margin:0;padding-left:0}
+    #useful-links li{margin:6px 0}
+    #useful-links a{color:var(--muted);text-decoration:none}
+    /* inline useful links */
+    #useful-links-inline{margin-top:8px}
+    #useful-links-inline a{color:var(--muted);text-decoration:none;display:block}
+    #useful-links-inline a:hover{color:#fff;text-decoration:underline}
+    a{transition:none}
+    /* buttons: single purple and brighter on hover */
+    button{background:var(--accent-purple);color:#fff}
+    button:hover{filter:brightness(1.18)}
+    /* cards: subtle hover brighten (no movement on hover) */
+    /* make hover state immediate and persistent while hovered */
+    .card{transition:none}
+    .card:hover{box-shadow:0 10px 26px rgba(25,6,60,0.5);background:rgba(255,255,255,0.02)}
+    button{transition:none}
+
+    /* Latest CVEs & News links should be white for contrast */
+    #cve-items a, #news-items a { color: #fff; text-decoration: none }
+    #cve-items a:hover, #news-items a:hover { color: #fff; text-decoration:underline }
+
+    /* CVE description style to match news date/body */
+    .desc{font-family:'Geist Sans',Inter,Arial,Helvetica,sans-serif;color:var(--muted);font-size:0.95em;margin-top:6px}
+
+    /* ensure headlines use the same font */
+    h1{font-family:'Geist Sans',Inter,Arial,Helvetica,sans-serif;font-weight:700;font-size:1.5rem}
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="logo">SEC</div>
+        <div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div>
+      </div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <div style="font-size:0.95em;color:var(--muted);margin-right:6px">Services:</div>
+      <div id="svc-cloudflare" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Cloudflare</div></div>
+      <div id="svc-aws" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">AWS</div></div>
+      <div id="svc-microsoft" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Microsoft</div></div>
+    </div>
+  </header>
+
+  <!-- Info panels row -->
+  <section style="display:flex;gap:16px;margin-bottom:16px">
+    <div class="card" style="flex:1;padding:10px;border-radius:6px;">
+      <div style="font-weight:600;margin-bottom:6px">Uptime</div>
+      <div id="uptime-chart" class="chart-panel" style="height:120px;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
+        <canvas id="uptime-canvas" width="400" height="120"></canvas>
+      </div>
+    </div>
+    <div class="card" style="flex:1;padding:10px;border-radius:6px;">
+      <div style="font-weight:600;margin-bottom:6px">CVE's per day</div>
+      <div id="cve-chart" class="chart-panel" style="height:120px;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
+        <canvas id="cve-canvas" width="400" height="120"></canvas>
+      </div>
+    </div>
+    <div id="useful-card" class="card" style="flex:1;padding:10px;border-radius:6px;display:flex;flex-direction:column;">
+      <div>
+        <div style="font-weight:600">Useful links</div>
+        <div id="useful-links-inline" style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+          <a href="https://www.cisa.gov/" target="_blank">CISA</a>
+          <a href="https://www.us-cert.gov/" target="_blank">US-CERT</a>
+        </div>
+      </div>
+      <div style="margin-top:auto">
+        <!--<label for="cve-search" style="font-weight:600;margin-right:6px">Search CVE</label>-->
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <input id="cve-search" placeholder="Search for CVE" style="padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;width:160px;max-width:60%">
+          <button id="cve-search-btn">Search</button>
+        </div>
+        <div id="cve-search-results" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="container">
+    <div class="left">
+      <h1>Latest CVEs</h1>
+      <div id="cve-list" class="list-scroll">
+        <div id="cve-items">Loading...</div>
+        <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="cve-load-more" style="display:none">Load more</button></div>
+      </div>
+    </div>
+    <div class="right">
+      <h1>IT News</h1>
+      <div id="news-list" class="list-scroll">
+        <div id="news-items">Loading...</div>
+        <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="news-load-more" style="display:none">Load more</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script src=/app.js></script>
+</body>
+</html>
