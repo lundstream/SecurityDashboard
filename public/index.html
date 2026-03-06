@@ -50,6 +50,22 @@
     .status-item:hover{box-shadow:0 10px 26px rgba(25,6,60,0.5);background:rgba(255, 255, 255, 0.021)}
     .status-item span.dot{width:12px;height:12px;border-radius:50%;background:#999;display:inline-block;box-shadow:0 0 6px rgba(0,0,0,0.4)}
     @media(max-width:900px){.container{flex-direction:column}.list-scroll{height:50vh}}
+    /* Mobile optimizations */
+    @media(max-width:600px){
+      header{flex-direction:column;align-items:flex-start;gap:10px}
+      .logo{width:48px;height:48px;border-radius:8px}
+      .site-title{font-size:1.05rem}
+      .container{gap:12px}
+      .card{padding:10px;border-radius:8px}
+      .list-scroll{height:40vh}
+      #useful-card .cve-search, input#cve-search{width:100%}
+      input#cve-search{width:100% !important;max-width:100%;box-sizing:border-box}
+      #cve-search-btn{width:100%;display:block;margin-top:8px}
+      .filter-select{width:100%}
+      .cvss-dropdown-menu{left:0;right:auto;min-width:140px}
+      .chart-panel{min-height:140px}
+      .footer-github{font-size:0.9rem}
+    }
     /* chart panel styling */
     .chart-panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.02));border:1px solid rgba(255,255,255,0.03);position:relative;overflow:hidden;min-height:100px}
     .chart-panel canvas{width:100% !important;height:100% !important;display:block}
