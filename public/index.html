@@ -78,12 +78,12 @@
       /* stack Services label above badges on small screens, keep badges inline */
       .header-services{flex-direction:column;align-items:flex-start;gap:8px}
       .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-      /* ensure there is extra space below footer on small screens (halved) */
-      body{padding-bottom:24px}
-      /* add space above GitHub link in footer on small screens (halved) */
-      .footer-github{margin-top:6px}
-      /* show footer spacer under the footer text for added gap (halved) */
-      .footer-spacer{display:block;height:11px;width:100%}
+      /* ensure there is extra space below footer on small screens (minimal) */
+      body{padding-bottom:8px}
+      /* small space above GitHub link on small screens */
+      .footer-github{margin-top:2px}
+      /* small footer spacer under the footer text */
+      .footer-spacer{display:block;height:4px;width:100%}
       /* add small bottom gap under copyright on small screens */
       .copyright{display:block;margin-bottom:8px}
     }
@@ -123,12 +123,12 @@
       /* stack Services label above badges on tall/narrow screens, keep badges inline */
       .header-services{flex-direction:column;align-items:flex-start;gap:8px}
       .service-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-      /* add breathing room under footer for portrait/tall windows (halved) */
-      body{padding-bottom:36px}
-      /* larger spacer on tall/portrait windows (halved) */
-      .footer-spacer{display:block;height:20px;width:100%}
-      /* add larger space above GitHub link for portrait/tall windows (halved) */
-      .footer-github{margin-top:15px}
+      /* add breathing room under footer for portrait/tall windows (reduced) */
+      body{padding-bottom:12px}
+      /* modest spacer on tall/portrait windows */
+      .footer-spacer{display:block;height:6px;width:100%}
+      /* modest space above GitHub link for portrait/tall windows */
+      .footer-github{margin-top:4px}
       /* larger bottom gap under copyright for portrait/tall windows */
       .copyright{display:block;margin-bottom:16px}
     }
@@ -143,9 +143,9 @@
       #useful-card button#cve-search-btn{width:120px;flex:0 0 120px}
       /* slightly increase spacing between columns */
       .container{gap:24px}
-      /* tighten footer gap on wide 16:9 screens: one line break only */
-      #site-footer{bottom:6px}
-      .footer-github{margin-top:6px}
+      /* tighten footer gap on wide 16:9 screens: one small line break */
+      #site-footer{bottom:4px}
+      .footer-github{margin-top:2px}
       .footer-spacer{display:none;height:0}
     }
     /* chart panel styling */
@@ -223,7 +223,7 @@
     #site-footer{position:static;left:auto;transform:none;bottom:auto;color:rgba(255, 255, 255, 0.418);font-size:0.95rem;z-index:3;display:flex;flex-direction:column;gap:6px;align-items:center}
     /* wide screens: show footer fixed at bottom center */
     @media (min-width:901px) {
-      #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:9px}
+      #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:4px}
     }
     /* footer spacer (hidden by default, shown on small/portrait screens) */
     .footer-spacer{display:none}
