@@ -14,81 +14,11 @@ function renderCveItems(items) {
     if (it.CVE) return it.CVE;
     if (it.cve) return it.cve;
     const s = JSON.stringify(it || '');
-    const m = s.match(/CVE-\d{4}-\d{4,7}/i);
-// CVE per-day chart: fetch stats or derive from recent CVEs, then render with color thresholds
-async function loadCveChart(){
-  let stats = null;
-  try{
-    stats = await fetchJSON('/api/cve-stats');
-    // expected format: [{date: 'YYYY-MM-DD', count: N}, ...]
-  }catch(e){
-    // fallback: derive from recent CVEs
-    try{
-      const raw = await fetchJSON('/api/cves?count=2000');
-      const map = {};
-      raw.forEach(it=>{
-        const d = (it.Published||it.published||it.PublishedDate||it.publishedDate||'').slice(0,10) || (it.Date || '').slice(0,10);
-        if(!d) return;
-        map[d] = (map[d]||0) + 1;
-      });
-      stats = Object.keys(map).sort().map(d=>({date:d,count:map[d]}));
-    }catch(err){
-      console.warn('Could not load CVE stats or derive from /api/cves:', err);
-      return;
-    }
-  }
-
-  if(!Array.isArray(stats) || stats.length===0) return;
-
-  // limit to last 30 entries if longer
-  const slice = stats.slice(-30);
-  const labels = slice.map(s=>s.date);
-  const data = slice.map(s=>s.count);
-
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-
-  function pickColor(val){
-    if(max===min) return '#7b2cff'; // flat data -> purple
-    const pct = ((val - min) / (max - min)) * 100;
-    if(pct <= 25) return '#7b2cff';
-    if(pct <= 50) return '#9b63ff';
-    if(pct <= 75) return '#d77bff';
-    return '#ff6fb1';
-  }
-
-  const bg = data.map(v=>pickColor(v));
-
-  const ctx = document.getElementById('cve-canvas').getContext('2d');
-  if(window.cveChart) window.cveChart.destroy();
-  window.cveChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: "CVE's per day",
-        data: data,
-        backgroundColor: bg,
-        borderWidth: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { grid: { display: false } },
-        y: { beginAtZero: true }
-      },
-      plugins: {
-        legend: { display: false }
-      }
-    }
-  });
-}
-
-// initialize CVE chart (async)
-setTimeout(()=>{ loadCveChart().catch(e=>console.warn(e)); }, 300);
-    return m ? m[0].toUpperCase() : '';
+    const mCVE = s.match(/CVE-\d{4}-\d{4,7}/i);
+    if (mCVE) return mCVE[0].toUpperCase();
+    const mGHSA = s.match(/GHSA-[\w-]+/i);
+    if (mGHSA) return mGHSA[0].toUpperCase();
+    return '';
   }
   function extractSummary(it) {
     if (!it) return '';
@@ -109,7 +39,13 @@ setTimeout(()=>{ loadCveChart().catch(e=>console.warn(e)); }, 300);
     }
     return '';
   }
-  function extractPublished(it) { return it.Published || it.published || (it.cveMetadata && it.cveMetadata.datePublished) || (it.cveMetadata && it.cveMetadata.dateUpdated) || 'N/A'; }
+  function extractPublished(it) {
+    const p = it.Published || it.published || (it.cveMetadata && it.cveMetadata.datePublished) || (it.cveMetadata && it.cveMetadata.dateUpdated) || null;
+    if (!p) return 'N/A';
+    const d = new Date(p);
+    if (!isNaN(d.getTime())) return d.toLocaleString();
+    return String(p);
+  }
   function extractCvss(it) {
     if (!it) return 'N/A';
     if (it.cvss) return it.cvss;
@@ -123,7 +59,11 @@ setTimeout(()=>{ loadCveChart().catch(e=>console.warn(e)); }, 300);
   }
   return items.map(it => {
     const id = extractId(it) || '(no id)';
-    const url = id && id !== '(no id)' ? 'https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + encodeURIComponent(id) : '#';
+    let url = '#';
+    if (id && id !== '(no id)') {
+      if (id.toUpperCase().startsWith('CVE-')) url = 'https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + encodeURIComponent(id);
+      else if (id.toUpperCase().startsWith('GHSA-')) url = 'https://github.com/advisories/' + encodeURIComponent(id);
+    }
     const cvss = extractCvss(it);
     const published = extractPublished(it);
     const summary = (extractSummary(it) || '(no summary)').replace(/\n/g, ' ');

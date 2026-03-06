@@ -76,7 +76,7 @@
     /* cards: subtle hover brighten (no movement on hover) */
     /* make hover state immediate and persistent while hovered */
     .card{transition:none}
-    .card:hover{box-shadow:0 10px 26px rgba(25,6,60,0.5);background:rgba(255, 255, 255, 0.010)}
+    .card:hover{box-shadow:0 5px 10px rgba(128, 12, 70, 0.144);background:rgba(255, 255, 255, 0.010)}
     button{transition:none}
 
     /* Latest CVEs & News links should be white for contrast */
@@ -103,7 +103,7 @@
         <div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div>
       </div>
     <div style="display:flex;gap:12px;align-items:center">
-      <div style="font-size:0.95em;color:var(--muted);margin-right:6px"><span aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-right:6px"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="14" viewBox="0 0 16 11" role="img"><rect width="16" height="11" fill="#006aa7"/><rect x="5" width="6" height="11" fill="#fecc00"/><rect y="4" width="16" height="3" fill="#fecc00"/></svg></span>Services</div>
+      <div style="font-size:0.95em;color:var(--muted);margin-right:6px"><span aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-right:6px"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="14" viewBox="0 0 16 11" role="img"><rect width="16" height="11" fill="#006aa7"/><rect x="5" width="6" height="11" fill="#fecc00"/><rect y="4" width="16" height="3" fill="#fecc00"/></svg></span>Services:</div>
       <div id="svc-cloudflare" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Cloudflare</div></div>
       <div id="svc-aws" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">AWS</div></div>
       <div id="svc-microsoft" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Microsoft</div></div>
@@ -129,7 +129,7 @@
         <div style="font-weight:600">Useful links:</div>
         <div id="useful-links-inline" style="display:flex;flex-direction:column;gap:6px;margin-top:6px;font-size:0.8em">
           <a href="https://www.cisa.gov/" target="_blank">CISA - Cyber Defense Agency</a>
-          <a href="https://status.cloud.microsoft/m365/referrer=serviceStatusRedirect" target="_blank">Microsoft - Service Health Status</a>
+          <a href="https://msrc.microsoft.com/" target="_blank">Microsoft - Security Response Center</a>
           <a href="https://haveibeenpwned.com/" target="_blank">Have I Been Pwned - Check your passwords</a>
         </div>
       </div>

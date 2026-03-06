@@ -141,6 +141,12 @@ async function checkServices() {
   const nvd = await probeUrl('https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1', 6000);
   details.push({ name: 'nvd_v2', ok: nvd.ok, status: nvd.status });
 
+  // VPN check (include in the main hourly check so we only append once per hour)
+  try {
+    const vpn = await probeUrl('https://vpn.lundstream.net/', 8000);
+    details.push({ name: 'vpn_lundstream', ok: vpn.ok, status: vpn.status });
+  } catch (e) { details.push({ name: 'vpn_lundstream', ok: false, status: 0, error: e && e.message }); }
+
   // (VPN checked hourly by separate scheduler)
 
   // Microsoft hosts: ping (HTTP) each host
@@ -189,39 +195,34 @@ async function checkServices() {
   // overall ok only if core services ok
   const overall = circl.ok && nvd.ok;
 
-  // store entry
+  // store entry (keep only last 24 hourly entries for the UI/history)
   global._uptimeHistory = global._uptimeHistory || [];
   const entry = { ts: now, ok: overall, details };
   global._uptimeHistory.push(entry);
-  // keep recent 288 entries by default
-  if (global._uptimeHistory.length > 288) global._uptimeHistory.shift();
-  // persist to disk (append/replace last)
+  // trim to last 24
+  global._uptimeHistory = global._uptimeHistory.slice(-24);
+  // persist to disk (replace with last 24)
   try {
-    const disk = await loadUptimeHistoryFile();
-    let out = disk && Array.isArray(disk) ? disk.slice() : [];
-    out.push(entry);
-    if (out.length > 288) out = out.slice(-288);
+    let out = global._uptimeHistory.slice();
     await saveUptimeHistoryFile(out);
   } catch (e) { /* ignore */ }
 
   return { ok: overall, services: details, historyLength: global._uptimeHistory.length };
 }
 
-// Poll services every 5 minutes to populate uptime history
-setInterval(() => { checkServices().catch(() => {}); }, 5 * 60 * 1000);
-// seed immediately
-checkServices().catch(() => {});
+// Poll services every hour to populate uptime history
+setInterval(() => { checkServices().catch(() => {}); }, 60 * 60 * 1000);
+// do not seed immediately here — uptime history will be prefilled and trimmed on startup
 
 // Ensure uptime file exists; prefill with OK entries if missing
 (async () => {
   try {
-    const disk = await loadUptimeHistoryFile();
-    if (!disk) {
-      // prefill 720 hours (~30 days hourly)
-      await prefillUptimeHistory(720);
-    } else {
-      global._uptimeHistory = disk.slice();
-    }
+    // Reset/prefill uptime history to last 24 hours (hourly entries)
+    // This ensures the persisted JSON reflects hourly sampling for the last day.
+    await prefillUptimeHistory(24);
+    // Trim any extra entries that may have been appended during startup to exactly 24
+    global._uptimeHistory = (global._uptimeHistory || []).slice(-24);
+    await saveUptimeHistoryFile(global._uptimeHistory);
   } catch (e) { console.error('uptime prefill error', e && e.message); }
 
   // Microsoft hosts check every 10 seconds (fast polling for status color)
@@ -241,26 +242,7 @@ checkServices().catch(() => {});
   checkMicrosoftOnce().catch(() => {});
   setInterval(() => checkMicrosoftOnce().catch(() => {}), 10 * 1000);
 
-  // VPN hourly (explicit) - update uptime history with vpn result
-  const checkVpnOnce = async () => {
-    try {
-      const r = await probeUrl('https://vpn.lundstream.net/', 8000);
-      const entry = { ts: Date.now(), ok: r.ok, details: [{ name: 'vpn_lundstream', ok: r.ok, status: r.status }] };
-      global._uptimeHistory = global._uptimeHistory || [];
-      global._uptimeHistory.push(entry);
-      if (global._uptimeHistory.length > 288) global._uptimeHistory.shift();
-      // persist
-      try {
-        const disk = await loadUptimeHistoryFile() || [];
-        disk.push(entry);
-        if (disk.length > 288) disk = disk.slice(-288);
-        await saveUptimeHistoryFile(disk);
-      } catch (e) {}
-    } catch (e) {}
-  };
-  // run immediately and hourly
-  checkVpnOnce().catch(() => {});
-  setInterval(() => checkVpnOnce().catch(() => {}), 60 * 60 * 1000);
+  // VPN is handled inside checkServices() now (no separate hourly appends)
 
   // Cloudflare & AWS periodic checks every minute
   const checkCloudflareAws = async () => {
@@ -287,7 +269,8 @@ checkServices().catch(() => {});
 app.get('/api/uptime', async (req, res) => {
   // return uptime history (timestamp + ok) limited to most recent N
   try {
-    res.json(global._uptimeHistory.slice(-144));
+    // only return last 24 hourly entries
+    res.json(global._uptimeHistory.slice(-24));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
