@@ -350,13 +350,33 @@
         const headerH = header ? header.getBoundingClientRect().height : 0;
         const topH = topPanels ? topPanels.getBoundingClientRect().height : 0;
         const footerH = footer ? footer.getBoundingClientRect().height : 0;
-        const available = Math.max(120, window.innerHeight - headerH - topH - footerH - gapBuffer);
-          lists.forEach(l => { l.style.height = available + 'px'; });
-          // ensure body has bottom padding equal to footer height + small buffer
-          if(footer){
+
+        // If page content is taller than the viewport, keep footer in document flow (static)
+        const contentHeight = document.body.scrollHeight;
+        if(footer){
+          if(contentHeight > window.innerHeight){
+            footer.style.position = 'static';
+            footer.style.left = '';
+            footer.style.transform = '';
+            footer.style.bottom = '';
+            footer.style.zIndex = '';
+            document.body.style.paddingBottom = '';
+          } else {
+            // keep footer fixed at bottom and pad the page so it doesn't overlap
+            footer.style.position = 'fixed';
+            footer.style.left = '50%';
+            footer.style.transform = 'translateX(-50%)';
+            footer.style.bottom = '12px';
+            footer.style.zIndex = 120;
             const pad = Math.ceil(footerH + gapBuffer);
             document.body.style.paddingBottom = pad + 'px';
           }
+        }
+
+        // Compute available list height (subtract footer height only when fixed)
+        const subtractFooter = (footer && getComputedStyle(footer).position === 'fixed') ? footerH + gapBuffer : gapBuffer;
+        const available = Math.max(120, window.innerHeight - headerH - topH - subtractFooter);
+        lists.forEach(l => { l.style.height = available + 'px'; });
       }
       function onResize(){
         if(resizeTimer) clearTimeout(resizeTimer);
