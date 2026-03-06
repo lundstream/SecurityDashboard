@@ -9,13 +9,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
   <style>
     :root{
       --bg-1:#0f0620;
       --bg-2:#2c0038;
       --accent-pink:#ff4da6;
       --accent-purple:#7b2cff;
-      --card-bg:rgba(255,255,255,0.03);
+      --card-bg:rgba(47, 0, 59, 0.904);
       --muted:rgba(255,255,255,0.6);
     }
     html,body{height:100%}
@@ -45,7 +46,8 @@
     /* header layout */
     .site-title{font-family:geist-mono,Orbitron,Inter,Arial;font-weight:700;color:#fff}
     .logo{width:56px;height:56px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#111;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));box-shadow:0 6px 20px rgba(123,44,255,0.18)}
-    .status-item{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.02);padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.03)}
+    .status-item{display:flex;align-items:center;gap:8px;background:rgba(47, 0, 59, 0.904);padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.03)}
+    .status-item:hover{box-shadow:0 10px 26px rgba(25,6,60,0.5);background:rgba(255, 255, 255, 0.021)}
     .status-item span.dot{width:12px;height:12px;border-radius:50%;background:#999;display:inline-block;box-shadow:0 0 6px rgba(0,0,0,0.4)}
     @media(max-width:900px){.container{flex-direction:column}.list-scroll{height:50vh}}
     /* chart panel styling */
@@ -74,7 +76,7 @@
     /* cards: subtle hover brighten (no movement on hover) */
     /* make hover state immediate and persistent while hovered */
     .card{transition:none}
-    .card:hover{box-shadow:0 10px 26px rgba(25,6,60,0.5);background:rgba(255,255,255,0.02)}
+    .card:hover{box-shadow:0 10px 26px rgba(25,6,60,0.5);background:rgba(255, 255, 255, 0.010)}
     button{transition:none}
 
     /* Latest CVEs & News links should be white for contrast */
@@ -86,6 +88,11 @@
 
     /* ensure headlines use the same font */
     h1{font-family:'Geist Sans',Inter,Arial,Helvetica,sans-serif;font-weight:700;font-size:1.5rem}
+    /* ensure feather icons align with text (nudge up slightly) */
+    svg.feather{vertical-align:middle;height:1em;width:1em;display:inline-block;margin-right:0.4rem;transform:translateY(-0.12em)}
+    /* smaller gap for footer github link and slightly smaller icon */
+    .footer-github{display:inline-flex;align-items:center;gap:4px}
+    .footer-github svg.feather{margin-right:4px;transform:translateY(-0.08em);height:0.95em;width:0.95em}
   </style>
 </head>
 <body>
@@ -138,14 +145,14 @@
 
   <div class="container">
     <div class="left">
-      <h1>Latest CVEs</h1>
+      <h1><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px"></i>Latest CVEs</h1>
       <div id="cve-list" class="list-scroll">
         <div id="cve-items">Loading...</div>
         <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="cve-load-more" style="display:none">Load more</button></div>
       </div>
     </div>
     <div class="right">
-      <h1>IT News</h1>
+      <h1><i data-feather="book-open" style="vertical-align:middle;margin-right:8px"></i>IT News</h1>
       <div id="news-list" class="list-scroll">
         <div id="news-items">Loading...</div>
         <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="news-load-more" style="display:none">Load more</button></div>
@@ -153,6 +160,25 @@
     </div>
   </div>
 
-  <script src=/app.js></script>
+  <script src="/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      function tryReplace(){
+        if(window.feather){
+          try{ feather.replace(); }catch(e){/* ignore */}
+        } else {
+          setTimeout(tryReplace, 200);
+        }
+      }
+      tryReplace();
+    });
+  </script>
+  <div id="site-footer" aria-hidden="true" style="position:fixed;left:50%;transform:translateX(-50%);bottom:9px;color:rgba(255, 255, 255, 0.418);font-size:0.95rem;z-index:3;display:flex;flex-direction:column;gap:6px;align-items:center">
+    <span>© 2026 Fredrik Lundström, all rights reserved.</span>
+    <a class="footer-github" href="https://github.com/lundstream/SecurityDashboard" target="_blank" rel="noopener" style="color:rgba(255, 255, 255, 0.788);text-decoration:none">
+      <i data-feather="github" style="vertical-align:middle"></i>
+      <span>Security dashboard on GitHub</span>
+    </a>
+  </div>
 </body>
 </html>

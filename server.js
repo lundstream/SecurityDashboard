@@ -310,9 +310,11 @@ async function fetchCveCountsFromNvd() {
     return `${Y}-${M}-${D}T${h}:${m}:${s}:000 UTC-00:00`;
   }
   const ps = 2000; let startIndex = 0; let totalResults = Infinity; let fetched = 0; let loop = 0;
+  const headers = { 'User-Agent': 'CVE-dashboard/1.0 (https://example)' };
+  if (process.env.NVD_API_KEY) headers['apiKey'] = process.env.NVD_API_KEY;
   while (fetched < totalResults && loop < 100) {
     const url = `${base}?pubStartDate=${encodeURIComponent(nvdDateString(startDate))}&pubEndDate=${encodeURIComponent(nvdDateString(endDate))}&startIndex=${startIndex}&resultsPerPage=${ps}`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'CVE-dashboard/1.0 (https://example)' } });
+    const r = await fetch(url, { headers });
     if (!r.ok) throw new Error('NVD API error '+r.status);
     const j = await r.json();
     const items = (j && j.result && j.result.CVE_Items) || [];
@@ -339,7 +341,31 @@ async function fetchCveCountsFromNvdFeed() {
     const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
     counts[d.toISOString().slice(0,10)] = 0;
   }
+  // Allow using local NVD feed files (set NVD_FEED_DIR to a directory containing nvdcve-1.1-YYYY.json.gz)
+  const localDir = process.env.NVD_FEED_DIR;
   const years = [now.getUTCFullYear(), now.getUTCFullYear() - 1];
+  if (localDir) {
+    try {
+      const dirents = await fs.readdir(localDir);
+      for (const f of dirents) {
+        if (!/nvdcve-1\.1-\d{4}\.json\.gz$/.test(f)) continue;
+        try {
+          const buf = await fs.readFile(path.join(localDir, f));
+          const out = zlib.gunzipSync(buf).toString('utf8');
+          const j = JSON.parse(out);
+          const items = j.CVE_Items || [];
+          items.forEach(it => {
+            const pd = it.publishedDate || it.published || null;
+            if (!pd) return;
+            const day = (new Date(pd)).toISOString().slice(0,10);
+            if (counts.hasOwnProperty(day)) counts[day]++;
+          });
+        } catch (e) { console.error('local feed parse error', f, e && e.message); }
+      }
+      return Object.keys(counts).sort().map(d => ({ date: d, count: counts[d] }));
+    } catch (e) { console.warn('NVD_FEED_DIR read failed', e && e.message); }
+  }
+  // fallback: remote download of yearly feeds
   for (const y of years) {
     const url = `https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-${y}.json.gz`;
     try {
@@ -467,6 +493,14 @@ app.get('/api/rss', async (req, res) => {
 });
 
 // Note: previous simple aggregator removed to avoid duplicate routes.
+
+// Export helpers so external scripts can trigger updates (useful for CLI runs)
+module.exports = {
+  updateCveHistoryFromSource,
+  fetchCveCountsFromNvd,
+  fetchCveCountsFromNvdFeed,
+  computeCveCountsFromSource
+};
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
