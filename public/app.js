@@ -34,7 +34,8 @@ function applyCvssFilterAndRender(){
   const sel = document.getElementById('cvss-filter');
   const container = document.getElementById('cve-items');
   if(!container) return;
-  const val = sel ? sel.value : 'all';
+  // prefer programmatic value set by custom dropdown
+  const val = (window._cvssFilterValue !== undefined) ? window._cvssFilterValue : (sel ? sel.value : 'all');
   let threshold = NaN;
   if(val !== 'all') threshold = Number(val) || NaN;
   const filtered = (window._cves || []).filter(it => {
@@ -250,7 +251,34 @@ function init() {
   setupCveSearch();
   // setup CVSS filter listener
   const sel = document.getElementById('cvss-filter');
-  if(sel){ sel.addEventListener('change', () => applyCvssFilterAndRender()); }
+  if(sel){ sel.addEventListener('change', () => { window._cvssFilterValue = sel.value; applyCvssFilterAndRender(); }); }
+  // init custom dropdown if present
+  const dd = document.getElementById('cvss-dropdown');
+  if(dd){
+    const btn = document.getElementById('cvss-dropdown-btn');
+    const menu = document.getElementById('cvss-dropdown-menu');
+    window._cvssFilterValue = 'all';
+    function closeMenu(){ if(menu){ menu.setAttribute('aria-hidden','true'); btn.setAttribute('aria-expanded','false'); } }
+    function openMenu(){ if(menu){ menu.setAttribute('aria-hidden','false'); btn.setAttribute('aria-expanded','true'); } }
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); const open = menu.getAttribute('aria-hidden') === 'false'; if(open) closeMenu(); else openMenu(); });
+    // option clicks
+    menu.querySelectorAll('.cvss-option').forEach(li=>{
+      li.addEventListener('click', (ev)=>{
+        const v = li.getAttribute('data-value'); window._cvssFilterValue = v;
+        // update label on button
+        btn.firstChild.nodeValue = (li.textContent || li.innerText) + ' ';
+        // mark selected
+        menu.querySelectorAll('.cvss-option').forEach(o=>o.removeAttribute('aria-selected'));
+        li.setAttribute('aria-selected','true');
+        applyCvssFilterAndRender();
+        closeMenu();
+      });
+    });
+    // close on outside click
+    document.addEventListener('click', ()=>{ closeMenu(); });
+    // initialize
+    closeMenu();
+  }
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
