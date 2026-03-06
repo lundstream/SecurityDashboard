@@ -73,9 +73,10 @@
     /* buttons: single purple and brighter on hover */
     button{background:var(--accent-purple);color:#fff}
     button:hover{filter:brightness(1.18)}
-    .filter-select{background:var(--accent-purple);color:#fff;border:1px solid rgba(255,255,255,0.04);padding:6px 8px;border-radius:8px;font-weight:600;cursor:pointer}
+    .filter-select{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#110428;border:0;padding:6px 8px;border-radius:8px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(123,44,255,0.18)}
     .filter-select:hover{filter:brightness(1.18)}
     .filter-select:focus{outline:2px solid rgba(255,255,255,0.06);outline-offset:2px}
+    .filter-select option{background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#110428}
     /* cards: subtle hover brighten (no movement on hover) */
     /* make hover state immediate and persistent while hovered */
     .card{transition:none}
