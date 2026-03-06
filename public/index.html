@@ -76,6 +76,37 @@
       /* slightly reduce logo svg size for balance */
       .logo svg.feather, .logo i { height:1.2em !important; width:1.2em !important; }
     }
+
+    /* Portrait / tall-narrow windows (desktop 9:16) */
+    @media (orientation:portrait), (max-aspect-ratio:9/16) {
+      /* Stack the header left area and align items */
+      header{flex-direction:column;align-items:flex-start}
+      header > div:first-child{display:flex;flex-direction:row;align-items:center;gap:10px}
+      header > div:first-child .site-title{font-size:1.05rem}
+
+      /* Stack top info panels and make full width */
+      .top-panels{flex-direction:column}
+      .top-panels > .card{width:100%;margin-bottom:14px}
+
+      /* Make main columns stack and expand */
+      .container{flex-direction:column}
+      .left, .right{width:100%;max-width:100%}
+
+      /* Move filter below heading and make it flow */
+      .left > div[style*="display:flex"]{flex-direction:column;align-items:flex-start;gap:10px}
+      #cvss-dropdown{width:auto;margin-top:8px}
+
+      /* Ensure search/input controls are full width */
+      #useful-card input#cve-search{width:100% !important}
+      #useful-card button#cve-search-btn{width:100%}
+
+      /* Avoid footer overlay */
+      #site-footer{position:static;left:auto;transform:none;bottom:auto;margin-top:18px}
+
+      /* Slightly reduce heavy shadows and spacing to breathe */
+      body{margin:10px}
+      .card{margin:8px 0}
+    }
     /* chart panel styling */
     .chart-panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.02));border:1px solid rgba(255,255,255,0.03);position:relative;overflow:hidden;min-height:100px}
     .chart-panel canvas{width:100% !important;height:100% !important;display:block}
