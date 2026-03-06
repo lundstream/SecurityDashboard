@@ -73,6 +73,9 @@
     /* buttons: single purple and brighter on hover */
     button{background:var(--accent-purple);color:#fff}
     button:hover{filter:brightness(1.18)}
+    .filter-select{background:var(--accent-purple);color:#fff;border:1px solid rgba(255,255,255,0.04);padding:6px 8px;border-radius:8px;font-weight:600;cursor:pointer}
+    .filter-select:hover{filter:brightness(1.18)}
+    .filter-select:focus{outline:2px solid rgba(255,255,255,0.06);outline-offset:2px}
     /* cards: subtle hover brighten (no movement on hover) */
     /* make hover state immediate and persistent while hovered */
     .card{transition:none}
@@ -150,7 +153,7 @@
         <h1 style="display:flex;align-items:center"><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px"></i>Latest CVE's</h1>
         <div style="display:flex;align-items:center;gap:8px">
           <label for="cvss-filter" style="font-size:0.95rem;color:var(--muted);margin-right:6px">Filter:</label>
-          <select id="cvss-filter" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);color:inherit;padding:6px 8px;border-radius:8px">
+          <select id="cvss-filter" class="filter-select">
             <option value="all">All</option>
             <option value="7">7+</option>
             <option value="8">8+</option>
