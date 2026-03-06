@@ -7,15 +7,46 @@ async function fetchJSON(url) {
 // client-side cache of loaded CVEs (pages appended here)
 window._cves = window._cves || [];
 
+// Parse a CVSS v3 vector string into a numeric base score, or return NaN
+function parseCvssVector(vec) {
+  if (!vec || typeof vec !== 'string') return NaN;
+  if (!/^CVSS:3\.[01]\//i.test(vec.trim())) return NaN;
+  const parts = {};
+  for (const seg of vec.trim().split('/').slice(1)) {
+    const colon = seg.indexOf(':');
+    if (colon > 0) parts[seg.slice(0, colon).toUpperCase()] = seg.slice(colon + 1).toUpperCase();
+  }
+  const AV = { N:0.85, A:0.62, L:0.55, P:0.2 };
+  const AC = { L:0.77, H:0.44 };
+  const PR_U = { N:0.85, L:0.62, H:0.27 };
+  const PR_C = { N:0.85, L:0.50, H:0.50 };
+  const UI = { N:0.85, R:0.62 };
+  const IM = { N:0, L:0.22, H:0.56 };
+  const scope = parts.S;
+  const av = AV[parts.AV], ac = AC[parts.AC];
+  const pr = scope === 'C' ? PR_C[parts.PR] : PR_U[parts.PR];
+  const ui = UI[parts.UI];
+  const c = IM[parts.C], i = IM[parts.I], a = IM[parts.A];
+  if ([av, ac, pr, ui, c, i, a].some(x => x === undefined)) return NaN;
+  const iscBase = 1 - (1 - c) * (1 - i) * (1 - a);
+  const isc = scope === 'C'
+    ? 7.52 * (iscBase - 0.029) - 3.25 * Math.pow(iscBase - 0.02, 15)
+    : 6.42 * iscBase;
+  if (isc <= 0) return 0;
+  const exp = 8.22 * av * ac * pr * ui;
+  const raw = scope === 'C' ? Math.min(1.08 * (isc + exp), 10) : Math.min(isc + exp, 10);
+  return Math.ceil(raw * 10) / 10; // round up to 1 decimal
+}
+
 function getCvssNumeric(it){
   if(!it) return NaN;
-  // try common locations for numeric CVSS scores
+  // try legacy flat fields
   if(typeof it.cvss === 'number') return it.cvss;
   if(it.cvss && !isNaN(Number(it.cvss))) return Number(it.cvss);
   if(it.cvss3 && it.cvss3.baseScore) return Number(it.cvss3.baseScore);
-  // NVD v2 style inside containers.adp[*].metrics[*].cvssV3_1.baseScore
+  // NVD v2 style inside containers.adp[*].metrics[*]
   try{
-    const cont = it.containers || it.containers || null;
+    const cont = it.containers || null;
     if(cont && cont.adp && cont.adp.length){
       for(const a of cont.adp){
         if(a.metrics && a.metrics.length){
@@ -27,6 +58,23 @@ function getCvssNumeric(it){
       }
     }
   }catch(e){/* ignore */}
+  // OSV/GHSA format: severity[].score is a CVSS vector string
+  if(Array.isArray(it.severity)){
+    for(const s of it.severity){
+      if(s && s.score){
+        const n = parseCvssVector(s.score);
+        if(!isNaN(n)) return n;
+      }
+    }
+  }
+  // fallback: database_specific.severity text → approximate numeric
+  if(it.database_specific && it.database_specific.severity){
+    const sev = String(it.database_specific.severity).toUpperCase();
+    if(sev === 'CRITICAL') return 9.0;
+    if(sev === 'HIGH')     return 7.5;
+    if(sev === 'MEDIUM')   return 5.0;
+    if(sev === 'LOW')      return 2.0;
+  }
   return NaN;
 }
 
@@ -145,14 +193,10 @@ function renderCveItems(items) {
     return String(p);
   }
   function extractCvss(it) {
-    if (!it) return 'N/A';
-    if (it.cvss) return it.cvss;
-    if (it.cvss3 && it.cvss3.baseScore) return it.cvss3.baseScore;
-    if (it.containers && it.containers.adp) {
-      const adp = it.containers.adp[0];
-      if (adp && adp.metrics && adp.metrics.length && adp.metrics[0].cvssV3_1) return adp.metrics[0].cvssV3_1.baseScore;
-    }
-    if (it.document && it.document.aggregate_severity) return it.document.aggregate_severity.text || 'N/A';
+    const n = getCvssNumeric(it);
+    if (!isNaN(n)) return n.toFixed(1);
+    if (it && it.database_specific && it.database_specific.severity) return it.database_specific.severity;
+    if (it && it.document && it.document.aggregate_severity) return it.document.aggregate_severity.text || 'N/A';
     return 'N/A';
   }
   return items.map(it => {
