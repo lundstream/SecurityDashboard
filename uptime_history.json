@@ -1,290 +1,226 @@
 [
   {
-    "ts": 1772827977969,
+    "ts": 1772770134564,
     "ok": true,
     "details": [
       {
-        "name": "circl_last",
+        "name": "prefill",
         "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 0
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
+        "note": "prefilled"
       }
     ]
   },
   {
-    "ts": 1772828037957,
+    "ts": 1772773734564,
     "ok": true,
     "details": [
       {
-        "name": "circl_last",
+        "name": "prefill",
         "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
+        "note": "prefilled"
       }
     ]
   },
   {
-    "ts": 1772828097962,
+    "ts": 1772777334564,
     "ok": true,
     "details": [
       {
-        "name": "circl_last",
+        "name": "prefill",
         "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
+        "note": "prefilled"
       }
     ]
   },
   {
-    "ts": 1772828150097,
+    "ts": 1772780934564,
     "ok": true,
     "details": [
       {
-        "name": "circl_last",
+        "name": "prefill",
         "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
+        "note": "prefilled"
       }
     ]
   },
   {
-    "ts": 1772828210095,
+    "ts": 1772784534564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772788134564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772791734564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772795334564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772798934564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772802534564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772806134564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772809734564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772813334564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772816934564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772820534564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772824134564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772827734564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772831334564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772834934564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772838534564,
+    "ok": true,
+    "details": [
+      {
+        "name": "prefill",
+        "ok": true,
+        "note": "prefilled"
+      }
+    ]
+  },
+  {
+    "ts": 1772838579961,
     "ok": true,
     "details": [
       {
@@ -355,7 +291,7 @@
     ]
   },
   {
-    "ts": 1772828241744,
+    "ts": 1772838639959,
     "ok": true,
     "details": [
       {
@@ -426,7 +362,7 @@
     ]
   },
   {
-    "ts": 1772828301750,
+    "ts": 1772838662689,
     "ok": true,
     "details": [
       {
@@ -497,1143 +433,7 @@
     ]
   },
   {
-    "ts": 1772828361740,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828417560,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828428018,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828488018,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828531135,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828591137,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828626793,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828686796,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828746959,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828806961,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828866968,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828926969,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772828986956,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772829089964,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772829149964,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772829153853,
-    "ok": true,
-    "details": [
-      {
-        "name": "circl_last",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "nvd_v2",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "vpn_lundstream",
-        "ok": true,
-        "status": 200
-      },
-      {
-        "name": "microsoft",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "outlook.office365.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "advania-my.sharepoint.com/",
-            "ok": true,
-            "status": 403
-          },
-          {
-            "host": "login.microsoftonline.com/",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "portal.office.com/",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "cloudflare",
-        "ok": true,
-        "color": "green",
-        "hosts": [
-          {
-            "host": "1.1.1.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          },
-          {
-            "host": "1.0.0.1/cdn-cgi/trace",
-            "ok": true,
-            "status": 200
-          }
-        ]
-      },
-      {
-        "name": "aws",
-        "ok": true,
-        "color": "green",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "ts": 1772829163136,
+    "ts": 1772838722965,
     "ok": true,
     "details": [
       {
