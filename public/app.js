@@ -8,15 +8,7 @@ async function fetchJSON(url) {
 window._cves = window._cves || [];
 
 // Parse a CVSS v3 vector string into a numeric base score, or return NaN
-function parseCvssVector(vec) {
-  if (!vec || typeof vec !== 'string') return NaN;
-  // accept CVSS v3.0/v3.1 and v4.0 vector strings
-  if (!/^CVSS:(3\.[01]|4\.0)\//i.test(vec.trim())) return NaN;
-  const parts = {};
-  for (const seg of vec.trim().split('/').slice(1)) {
-    const colon = seg.indexOf(':');
-    if (colon > 0) parts[seg.slice(0, colon).toUpperCase()] = seg.slice(colon + 1).toUpperCase();
-  }
+function parseCvssV3(parts) {
   const AV = { N:0.85, A:0.62, L:0.55, P:0.2 };
   const AC = { L:0.77, H:0.44 };
   const PR_U = { N:0.85, L:0.62, H:0.27 };
@@ -36,7 +28,47 @@ function parseCvssVector(vec) {
   if (isc <= 0) return 0;
   const exp = 8.22 * av * ac * pr * ui;
   const raw = scope === 'C' ? Math.min(1.08 * (isc + exp), 10) : Math.min(isc + exp, 10);
-  return Math.ceil(raw * 10) / 10; // round up to 1 decimal
+  return Math.ceil(raw * 10) / 10;
+}
+
+// Approximate CVSS v4 base score from vector metrics
+function parseCvssV4(parts) {
+  // Impact values for Vulnerable system (VC/VI/VA) and Subsequent system (SC/SI/SA)
+  const IM = { N:0, L:0.22, H:0.56 };
+  const vc = IM[parts.VC], vi = IM[parts.VI], va = IM[parts.VA];
+  const sc = IM[parts.SC], si = IM[parts.SI], sa = IM[parts.SA];
+  if ([vc, vi, va, sc, si, sa].some(x => x === undefined)) return NaN;
+  // Exploitability weights
+  const AV = { N:0.85, A:0.62, L:0.55, P:0.2 };
+  const AC = { L:0.77, H:0.44 };
+  const AT = { N:1.0, P:0.7 };
+  const PR = { N:0.85, L:0.62, H:0.27 };
+  const UI = { N:0.85, P:0.62, A:0.43 };
+  const av = AV[parts.AV], ac = AC[parts.AC], at = AT[parts.AT];
+  const pr = PR[parts.PR], ui = UI[parts.UI];
+  if ([av, ac, at, pr, ui].some(x => x === undefined)) return NaN;
+  // Combined impact from both vulnerable and subsequent systems
+  const vulnImpact = 1 - (1 - vc) * (1 - vi) * (1 - va);
+  const subImpact  = 1 - (1 - sc) * (1 - si) * (1 - sa);
+  const totalImpact = 1 - (1 - vulnImpact) * (1 - subImpact * 0.5);
+  const isc = 6.42 * totalImpact;
+  if (isc <= 0) return 0;
+  const exp = 8.22 * av * ac * at * pr * ui;
+  const raw = Math.min(isc + exp, 10);
+  return Math.ceil(raw * 10) / 10;
+}
+
+function parseCvssVector(vec) {
+  if (!vec || typeof vec !== 'string') return NaN;
+  const trimmed = vec.trim();
+  const verMatch = trimmed.match(/^CVSS:(3\.[01]|4\.0)\//i);
+  if (!verMatch) return NaN;
+  const parts = {};
+  for (const seg of trimmed.split('/').slice(1)) {
+    const colon = seg.indexOf(':');
+    if (colon > 0) parts[seg.slice(0, colon).toUpperCase()] = seg.slice(colon + 1).toUpperCase();
+  }
+  return verMatch[1].startsWith('4') ? parseCvssV4(parts) : parseCvssV3(parts);
 }
 
 function getCvssNumeric(it){
@@ -73,7 +105,7 @@ function getCvssNumeric(it){
     const sev = String(it.database_specific.severity).toUpperCase();
     if(sev === 'CRITICAL') return 9.0;
     if(sev === 'HIGH')     return 7.5;
-    if(sev === 'MEDIUM')   return 5.0;
+    if(sev === 'MEDIUM' || sev === 'MODERATE') return 5.0;
     if(sev === 'LOW')      return 2.0;
   }
   return NaN;
