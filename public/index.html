@@ -178,9 +178,14 @@
     /* smaller gap for footer github link and slightly smaller icon */
     .footer-github{display:inline-flex;align-items:center;gap:4px}
     .footer-github svg.feather{margin-right:4px;transform:translateY(-0.08em);height:0.95em;width:0.95em}
-    /* site footer default (moved from inline) */
-    #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:9px;color:rgba(255, 255, 255, 0.418);font-size:0.95rem;z-index:3;display:flex;flex-direction:column;gap:6px;align-items:center}
+    /* site footer default: static so it doesn't overlay in tall/narrow windows */
+    #site-footer{position:static;left:auto;transform:none;bottom:auto;color:rgba(255, 255, 255, 0.418);font-size:0.95rem;z-index:3;display:flex;flex-direction:column;gap:6px;align-items:center}
   </style>
+
+    /* wide screens: show footer fixed at bottom center */
+    @media (min-width:901px) {
+      #site-footer{position:fixed;left:50%;transform:translateX(-50%);bottom:9px}
+    }
 </head>
 <body>
   <!-- Header -->
