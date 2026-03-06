@@ -268,13 +268,32 @@ function renderCveItems(items) {
     else if (it && it.url) url = it.url;
     const cvss = extractCvss(it);
     const published = extractPublished(it);
-    let summary = (extractSummary(it) || '').replace(/\n/g, ' ').trim();
+    let rawSummary = extractSummary(it) || '';
+    // Strip markdown to plain text: remove code blocks, headers, links, images, bold/italic, lists
+    let summary = rawSummary
+      .replace(/```[\s\S]*?```/g, '')           // fenced code blocks
+      .replace(/`[^`]*`/g, '')                   // inline code
+      .replace(/^#{1,6}\s+.*$/gm, '')            // markdown headers
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')      // images
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')   // links → text
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')        // bold
+      .replace(/(\*|_)(.*?)\1/g, '$2')           // italic
+      .replace(/^\s*[-*+]\s+/gm, '')             // unordered list markers
+      .replace(/^\s*\d+\.\s+/gm, '')             // ordered list markers
+      .replace(/\n{2,}/g, '\n')                  // collapse blank lines
+      .replace(/\n/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     // avoid duplicating title when summary begins with the same text
     if (title && summary) {
       const tnorm = title.replace(/\s+/g,' ').trim();
       if (summary.indexOf(tnorm) === 0) {
         summary = summary.slice(tnorm.length).trim();
       }
+    }
+    // Truncate to ~300 chars at a word boundary
+    if (summary.length > 300) {
+      summary = summary.slice(0, 300).replace(/\s+\S*$/, '') + '…';
     }
     if (!summary) summary = '(no summary)';
     const zeroTag = /\bzero[- ]?day\b|\b0[- ]?day\b|zero\sday/i.test(summary) ? '<span class="tag">Possible Zero-Day</span>' : '';
