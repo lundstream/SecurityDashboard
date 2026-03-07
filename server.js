@@ -17,6 +17,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 const CIRCL_LAST = 'https://cve.circl.lu/api/last';
+const CIRCL_LAST_INIT = 'https://cve.circl.lu/api/last/100'; // larger initial fetch
 const CVE_STORE_FILE = path.join(__dirname, 'cves_store.json');
 const CVE_POLL_INTERVAL = 60 * 60 * 1000; // 1 hour
 const CVE_MAX_AGE_DAYS = 30;
@@ -88,7 +89,9 @@ function purgeCveStore() {
 
 async function pollCves() {
   try {
-    const r = await fetch(CIRCL_LAST);
+    // Use larger fetch when store is empty (initial populate)
+    const url = _cveStore.length === 0 ? CIRCL_LAST_INIT : CIRCL_LAST;
+    const r = await fetch(url);
     let data = await r.json();
     if (!Array.isArray(data)) {
       if (data && Array.isArray(data.value)) data = data.value;
