@@ -340,14 +340,28 @@ function renderCveItems(items) {
     }
     // append zero-day tag after the title
     const zeroHtml = zeroTag ? (' ' + zeroTag) : '';
+    // Enrichment badges
+    const discovered = it._discovered ? fmtDate(it._discovered) : '';
+    const kevBadge = it._kev ? '<span class="badge badge-kev">KEV</span>' : '';
+    const exploitBadge = it._exploit ? '<span class="badge badge-exploit">Exploit</span>' : '<span class="badge badge-no">No exploit</span>';
+    const patchBadge = it._patch ? '<span class="badge badge-patch">Patch</span>' : '<span class="badge badge-nopatch">No patch</span>';
+    const discoveredLine = discovered ? `Discovered: ${discovered} • ` : '';
     return `
       <div class="card">
         <div>${headHtml}${zeroHtml}</div>
-        <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • Published: ${published}</div>
+        <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • ${discoveredLine}Published: ${published}</div>
+        <div class="cve-badges">${exploitBadge} ${patchBadge} ${kevBadge}</div>
         <div class="desc">${escapeHtml(summary)}</div>
       </div>
     `;
   }).join('');
+}
+
+function fmtDate(dt) {
+  if (!dt) return 'N/A';
+  const d = (dt instanceof Date) ? dt : new Date(dt);
+  if (isNaN(d.getTime())) return 'N/A';
+  return d.toISOString().slice(0, 10);
 }
 
 // small helper to escape HTML in title/summary strings
@@ -390,6 +404,7 @@ let newsPageSize = 15;
 let newsOffset = 0;
 let _newsPreloaded = null;   // background-fetched next batch
 let _newsPreloading = false;
+let _newsSources = [];       // selected source URLs (empty = all)
 
 let cvePageSize = 10;
 let cveOffset = 0;
@@ -411,7 +426,9 @@ async function preloadNews(offset) {
   if (_newsPreloading || _newsPreloaded !== null) return;
   _newsPreloading = true;
   try {
-    const data = await fetchJSON(`/api/rss?count=${newsPageSize}&offset=${offset}`);
+    let url = `/api/rss?count=${newsPageSize}&offset=${offset}`;
+    if (_newsSources.length) url += '&source=' + encodeURIComponent(_newsSources.join(','));
+    const data = await fetchJSON(url);
     _newsPreloaded = Array.isArray(data) ? data : [];
   } catch (e) { _newsPreloaded = []; }
   _newsPreloading = false;
@@ -430,7 +447,9 @@ async function loadNews(offsetArg) {
     _newsPreloaded = null;
   } else {
     try {
-      news = await fetchJSON(`/api/rss?count=${newsPageSize}&offset=${offset}`);
+      let url = `/api/rss?count=${newsPageSize}&offset=${offset}`;
+      if (_newsSources.length) url += '&source=' + encodeURIComponent(_newsSources.join(','));
+      news = await fetchJSON(url);
     } catch (e) {
       if (offset === 0) container.innerHTML = 'Error: ' + e.message;
       if (btn) { btn.disabled = false; btn.textContent = 'Load more'; btn.dataset.available = 'false'; }
@@ -550,6 +569,76 @@ function setupFooterObserver(listId, btnId) {
   });
 }
 
+// --- URL-to-friendly-name mapping for news sources ---
+const SOURCE_NAMES = {
+  'https://www.bleepingcomputer.com/feed/': 'BleepingComputer',
+  'https://feeds.feedburner.com/TheHackersNews': 'The Hacker News',
+  'https://techcrunch.com/feed/': 'TechCrunch',
+  'https://www.securityweek.com/feed/': 'SecurityWeek',
+  'https://www.schneier.com/blog/atom.xml': 'Schneier on Security',
+  'https://www.reddit.com/r/netsec/.rss': 'r/netsec',
+  'https://computersweden.se/feed/': 'Computer Sweden',
+  'https://neowin.net/news/rss/': 'Neowin',
+  'https://advania.se/feed/': 'Advania',
+};
+function friendlySourceName(url) {
+  if (SOURCE_NAMES[url]) return SOURCE_NAMES[url];
+  try { const u = new URL(url); return u.hostname.replace(/^www\./, ''); } catch (e) { return url; }
+}
+
+// --- News source filter dropdown ---
+async function setupNewsSourceFilter() {
+  const btn = document.getElementById('news-source-btn');
+  const menu = document.getElementById('news-source-menu');
+  if (!btn || !menu) return;
+
+  // Fetch available sources
+  let sources = [];
+  try { sources = await fetchJSON('/api/news-sources'); } catch (e) {}
+
+  // Build menu items
+  menu.innerHTML = '<li class="cvss-option" data-value="all" role="option" aria-selected="true">All</li>' +
+    sources.map(s => `<li class="cvss-option" data-value="${s}" role="option">${friendlySourceName(s)}</li>`).join('');
+
+  let selectedSource = null; // null = all
+
+  function closeMenu() { menu.setAttribute('aria-hidden', 'true'); btn.setAttribute('aria-expanded', 'false'); }
+  function openMenu() { menu.setAttribute('aria-hidden', 'false'); btn.setAttribute('aria-expanded', 'true'); }
+
+  function updateSelection() {
+    menu.querySelectorAll('.cvss-option').forEach(o => {
+      const v = o.getAttribute('data-value');
+      if (v === 'all') o.setAttribute('aria-selected', selectedSource === null ? 'true' : 'false');
+      else o.setAttribute('aria-selected', v === selectedSource ? 'true' : 'false');
+    });
+    btn.firstChild.nodeValue = selectedSource ? friendlySourceName(selectedSource) + ' ' : 'All ';
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.getAttribute('aria-hidden') === 'false';
+    if (open) closeMenu(); else openMenu();
+  });
+
+  menu.querySelectorAll('.cvss-option').forEach(li => {
+    li.addEventListener('click', () => {
+      const v = li.getAttribute('data-value');
+      selectedSource = (v === 'all') ? null : v;
+      _newsSources = selectedSource ? [selectedSource] : [];
+      updateSelection();
+      closeMenu();
+      // Reset pagination and reload
+      newsOffset = 0;
+      _newsPreloaded = null;
+      _newsPreloading = false;
+      loadNews(0);
+    });
+  });
+
+  document.addEventListener('click', () => { closeMenu(); });
+  closeMenu();
+}
+
 function init() {
   setupFooterObserver('news-list', 'news-load-more');
   setupFooterObserver('cve-list', 'cve-load-more');
@@ -562,8 +651,12 @@ function init() {
   fetchUptimeStats();
   fetchAndRenderCveStats();
   setupCveSearch();
+  setupReportDropdown();
+  setupLinksDropdown();
+  setupNewsSourceFilter();
   fetchVisitorIp();
   fetchPublicSettings();
+  fetchAndRenderVendorDonut();
   setupThemeToggle();
   // setup CVSS filter listener
   const sel = document.getElementById('cvss-filter');
@@ -675,6 +768,36 @@ function setupCveSearch(){
   });
 }
 
+function setupReportDropdown() {
+  const btn = document.getElementById('report-dropdown-btn');
+  const menu = document.getElementById('report-dropdown-menu');
+  if (!btn || !menu) return;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.classList.toggle('open');
+    // close links dropdown
+    const lm = document.getElementById('links-dropdown-menu');
+    if (lm) lm.classList.remove('open');
+  });
+  document.addEventListener('click', () => menu.classList.remove('open'));
+  menu.addEventListener('click', (e) => e.stopPropagation());
+}
+
+function setupLinksDropdown() {
+  const btn = document.getElementById('links-dropdown-btn');
+  const menu = document.getElementById('links-dropdown-menu');
+  if (!btn || !menu) return;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.classList.toggle('open');
+    // close report dropdown
+    const rm = document.getElementById('report-dropdown-menu');
+    if (rm) rm.classList.remove('open');
+  });
+  document.addEventListener('click', () => menu.classList.remove('open'));
+  menu.addEventListener('click', (e) => e.stopPropagation());
+}
+
 // refresh service status periodically so UI updates when server cache changes
 setInterval(() => { try { fetchAndRenderStatus(); } catch (e) {} }, 60 * 1000);
 
@@ -702,6 +825,7 @@ async function fetchAndRenderUptime(){
       data: { labels, datasets: [{ data: values, backgroundColor: bgColors, borderRadius: 3 }] },
       options: {
         maintainAspectRatio: false,
+        layout: { padding: { top: 2, bottom: 0, left: 0, right: 0 } },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -757,6 +881,7 @@ async function fetchAndRenderCveStats(){
       data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderRadius:4 }] },
       options: {
         maintainAspectRatio: false,
+        layout: { padding: { top: 2, bottom: 0, left: 0, right: 0 } },
         plugins: {
           legend: { display: false },
           tooltip: { callbacks: { title: items => { return items && items[0] && items[0].label ? items[0].label : '' }, label: ctx => `${ctx.parsed.y}` } }
@@ -772,7 +897,8 @@ async function fetchAndRenderCveStats(){
 }
 
 // --- Visitor IP + country flag ---
-async function fetchVisitorIp() {
+async function fetchVisitorIp(retries) {
+  retries = retries || 0;
   try {
     const res = await fetchJSON('/api/myip');
     const addrEl = document.getElementById('ip-addr');
@@ -782,7 +908,10 @@ async function fetchVisitorIp() {
       const cc = res.countryCode.toLowerCase();
       flagEl.innerHTML = `<img src="https://flagcdn.com/20x15/${cc}.png" width="20" height="15" alt="${res.countryCode}" style="vertical-align:middle;border-radius:2px">`;
     }
-  } catch (e) { console.error('visitor ip', e); }
+  } catch (e) {
+    console.error('visitor ip', e);
+    if (retries < 3) setTimeout(() => fetchVisitorIp(retries + 1), 3000);
+  }
 }
 
 // --- Uptime stats (30-day percentage) ---
@@ -802,7 +931,7 @@ async function fetchUptimeStats() {
   } catch (e) { console.error('uptime-stats', e); }
 }
 
-// --- Public settings (logo, site name) ---
+// --- Public settings (logo, site name, links) ---
 async function fetchPublicSettings() {
   try {
     const res = await fetchJSON('/api/settings/public');
@@ -820,7 +949,47 @@ async function fetchPublicSettings() {
         logoEl.innerHTML = `<img src="${escapeHtml(res.logo)}" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px">`;
       }
     }
+    // Populate links dropdown
+    if (res.links) {
+      const label = document.getElementById('links-dropdown-label');
+      if (label && res.links.name) label.textContent = res.links.name;
+      const menu = document.getElementById('links-dropdown-menu');
+      if (menu && Array.isArray(res.links.items)) {
+        menu.innerHTML = res.links.items.map(l =>
+          `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> ${escapeHtml(l.title)}</a>`
+        ).join('');
+      }
+    }
   } catch (e) { console.error('settings', e); }
+}
+
+// --- Vendor donut chart on dashboard ---
+async function fetchAndRenderVendorDonut() {
+  try {
+    const vendors = await fetchJSON('/api/top-vendors');
+    const canvas = document.getElementById('vendor-donut-canvas');
+    if (!canvas || !Array.isArray(vendors) || vendors.length === 0) return;
+    const labels = vendors.map(v => v.vendor || 'Unknown');
+    const counts = vendors.map(v => v.cnt || 0);
+    const colors = ['#8400ff','#9b63ff','#b47aff','#d77bff','#ff6fb1','#ff4da6','#e74c3c','#e67e22','#f1c40f'];
+    const isLight = document.documentElement.classList.contains('light-theme');
+    const labelColor = isLight ? '#1a0a2e' : '#efe8ff';
+    new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data: counts, backgroundColor: colors.slice(0, labels.length), borderWidth: 0 }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        cutout: '55%',
+        plugins: {
+          legend: { display: true, position: 'right', labels: { color: labelColor, boxWidth: 10, font: { size: 10 }, padding: 6 } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} CVEs` } }
+        }
+      }
+    });
+  } catch (e) { console.error('vendor-donut', e); }
 }
 
 // --- Light/Dark theme toggle ---
@@ -838,9 +1007,30 @@ function setupThemeToggle() {
     const isLight = document.documentElement.classList.contains('light-theme');
     localStorage.setItem('theme', isLight ? 'light' : 'dark');
     updateThemeIcon();
+    updateChartColors();
   });
   function updateThemeIcon() {
     const isLight = document.documentElement.classList.contains('light-theme');
     btn.innerHTML = isLight ? moonSvg : sunSvg;
   }
+}
+
+function updateChartColors() {
+  const isLight = document.documentElement.classList.contains('light-theme');
+  const tickColor = isLight ? 'rgba(40,20,60,0.6)' : 'rgba(255,255,255,0.6)';
+  const gridColor = isLight ? 'rgba(100,60,140,0.08)' : 'rgba(255,255,255,0.04)';
+  const labelColor = isLight ? '#1a0a2e' : '#efe8ff';
+  if (window.cveChart) {
+    window.cveChart.options.scales.y.ticks.color = tickColor;
+    window.cveChart.options.scales.y.grid.color = gridColor;
+    window.cveChart.update();
+  }
+  // Update all Chart.js instances (vendor donut legend etc.)
+  const allCharts = Object.values(Chart.instances || {});
+  allCharts.forEach(c => {
+    if (c.config && c.config.type === 'doughnut' && c.options.plugins.legend) {
+      c.options.plugins.legend.labels.color = labelColor;
+      c.update();
+    }
+  });
 }

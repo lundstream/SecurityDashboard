@@ -262,8 +262,9 @@ async function pollCves() {
       if (!id) continue;
       const d = extractItemDate(it);
       const published = d ? d.toISOString() : null;
+      const enrichment = enrichCveItem(id, it);
       // upsert — SQLite handles dedup by primary key
-      db.upsertCve(id, it, published, extractCvssScore(it));
+      db.upsertCve(id, it, published, extractCvssScore(it), enrichment);
       added++;
     }
     const purged = db.purgeCves(settings.polling.cveMaxAgeDays);
@@ -441,6 +442,210 @@ async function pollCloudflareAws() {
 }
 
 // =========================================================================
+//  KEV (CISA Known Exploited Vulnerabilities) POLLING
+// =========================================================================
+const KEV_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
+
+async function pollKev() {
+  try {
+    console.log('Polling CISA KEV catalog...');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const r = await fetch(KEV_URL, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!r.ok) { console.error('KEV fetch failed:', r.status); return; }
+    const json = await r.json();
+    const vulns = json.vulnerabilities || [];
+    let added = 0;
+    for (const v of vulns) {
+      if (!v.cveID) continue;
+      db.upsertKev(v.cveID, v.vendorProject || '', v.product || '', v.dateAdded || '', v.shortDescription || '');
+      added++;
+    }
+    console.log(`KEV: ${added} entries cached`);
+    // Mark matching CVEs in the database
+    const kevSet = db.getKevSet();
+    const d = db.getDb();
+    const rows = d.prepare(`SELECT id FROM cves WHERE kev = 0 OR kev IS NULL`).all();
+    let marked = 0;
+    for (const row of rows) {
+      if (kevSet.has(row.id)) {
+        db.updateCveEnrichment(row.id, { kev: true });
+        marked++;
+      }
+    }
+    if (marked > 0) console.log(`KEV: marked ${marked} existing CVEs`);
+    // Also apply KEV vendor info to CVEs missing vendor
+    const kevRows = db.getKevEntries();
+    let vendorFilled = 0;
+    for (const kv of kevRows) {
+      if (!kv.vendor) continue;
+      const cveRow = d.prepare(`SELECT vendor FROM cves WHERE id = ?`).get(kv.cve_id);
+      if (cveRow && (!cveRow.vendor || cveRow.vendor === '')) {
+        db.updateCveEnrichment(kv.cve_id, { vendor: kv.vendor, kev: true });
+        vendorFilled++;
+      }
+    }
+    if (vendorFilled > 0) console.log(`KEV: filled vendor for ${vendorFilled} CVEs`);
+  } catch (e) {
+    console.error('KEV poll error:', e && e.message);
+  }
+}
+
+// =========================================================================
+//  CVE ENRICHMENT (extract vendor, discovered, exploit/patch from data)
+// =========================================================================
+function enrichCveItem(id, item) {
+  const enrichment = {};
+
+  // Discovered date (dateReserved = when CVE ID was assigned, or lastModified as fallback)
+  try {
+    const reserved = item.cveMetadata && item.cveMetadata.dateReserved;
+    if (reserved) {
+      const d = new Date(reserved);
+      if (!isNaN(d.getTime())) enrichment.discovered = d.toISOString();
+    }
+    if (!enrichment.discovered && item.lastModified) {
+      const d = new Date(item.lastModified);
+      if (!isNaN(d.getTime())) enrichment.discovered = d.toISOString();
+    }
+  } catch (e) {}
+
+  // Vendor extraction
+  try {
+    const VENDOR_BLOCKLIST = new Set([
+      'chrome-cve-admin','security_alert','security-advisories','security','audit',
+      'cna','disclosure','psirt','secure','vulnerabilities','vulnerability','scy',
+      'cve-coordination','ics-cert','cybersecurity','infosec','product-security',
+      'productsecurity','product-cve','csirt','cert-in','certcc','sirt','prodsec',
+      'secalert','secalert_us','responsibledisclosure','vulnreport','reachout',
+      'contact','info','support','nvd','nist','zdi-disclosures','cvd','n/a',
+      'openclaw','open-emr','oretnom23','fabian','iletisim','gfi','nsasoft'
+    ]);
+    function isValidVendor(v) {
+      if (!v || v.length <= 2 || v.length > 30) return false;
+      if (VENDOR_BLOCKLIST.has(v.toLowerCase())) return false;
+      if (/^[0-9a-f-]{20,}$/i.test(v)) return false;
+      return true;
+    }
+    // CIRCL / CVE 5.0 format
+    if (item.containers && item.containers.cna && item.containers.cna.affected) {
+      const aff = item.containers.cna.affected;
+      if (Array.isArray(aff) && aff.length > 0 && aff[0].vendor && isValidVendor(aff[0].vendor)) {
+        enrichment.vendor = aff[0].vendor;
+      }
+    }
+    // NVD v2 format: configurations -> nodes -> cpeMatch -> criteria
+    if (!enrichment.vendor && item.configurations) {
+      const configs = Array.isArray(item.configurations) ? item.configurations : [item.configurations];
+      outer:
+      for (const cfg of configs) {
+        const nodes = cfg.nodes || (cfg.cpeMatch ? [cfg] : []);
+        for (const node of nodes) {
+          const matches = node.cpeMatch || [];
+          for (const m of matches) {
+            if (m.criteria) {
+              const parts = m.criteria.split(':');
+              if (parts.length > 3 && parts[3] && parts[3] !== '*' && isValidVendor(parts[3])) {
+                enrichment.vendor = parts[3];
+                break outer;
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  // Exploit and Patch detection from references
+  try {
+    let refs = [];
+    // NVD references
+    if (Array.isArray(item.references)) refs = refs.concat(item.references);
+    // CIRCL containers.cna.references
+    if (item.containers && item.containers.cna && Array.isArray(item.containers.cna.references)) {
+      refs = refs.concat(item.containers.cna.references);
+    }
+    let hasExploit = false;
+    let hasPatch = false;
+    for (const ref of refs) {
+      const tags = ref.tags || [];
+      const url = (ref.url || '').toLowerCase();
+      // Check tags
+      for (const tag of tags) {
+        const t = String(tag).toLowerCase();
+        if (t === 'exploit' || t.includes('exploit')) hasExploit = true;
+        if (t === 'patch' || t.includes('patch')) hasPatch = true;
+      }
+      // Check URL patterns
+      if (url.includes('exploit-db.com') || url.includes('packetstorm') || url.includes('/poc') || url.includes('proof-of-concept')) hasExploit = true;
+      if (url.includes('/patch') || url.includes('/fix') || url.includes('/advisory') || url.includes('security-update')) hasPatch = true;
+    }
+    enrichment.has_exploit = hasExploit;
+    enrichment.has_patch = hasPatch;
+  } catch (e) {}
+
+  return enrichment;
+}
+
+// Enrich all existing CVEs missing enrichment data
+function enrichExistingCves() {
+  const d = db.getDb();
+  const rows = d.prepare(`SELECT id, data FROM cves WHERE vendor IS NULL OR vendor = '' OR discovered IS NULL LIMIT 5000`).all();
+  if (rows.length === 0) return;
+  let enriched = 0;
+  const kevSet = db.getKevSet();
+  for (const row of rows) {
+    try {
+      const item = JSON.parse(row.data);
+      const e = enrichCveItem(row.id, item);
+      if (kevSet.has(row.id)) e.kev = true;
+      db.updateCveEnrichment(row.id, e);
+      enriched++;
+    } catch (err) {}
+  }
+  console.log(`Enriched ${enriched}/${rows.length} CVEs with metadata`);
+}
+
+// =========================================================================
+//  REPORT GENERATION
+// =========================================================================
+function generateReport() {
+  console.log('Generating vulnerability report...');
+  const stats = db.getReportStats(30);
+  const topVendors = db.getTopVendors(30, 8);
+  const kevCves = db.getReportCves({ days: 30, kevOnly: true });
+  const highNoPatch = db.getReportCves({ days: 30, minCvss: 8, noPatchOnly: true, limit: 50 });
+  const critWithPatch = db.getReportCves({ days: 30, minCvss: 9, patchOnly: true, limit: 50 });
+
+  const report = {
+    stats,
+    topVendors,
+    kevCves: kevCves.map(simplify),
+    highNoPatch: highNoPatch.map(simplify),
+    critWithPatch: critWithPatch.map(simplify)
+  };
+  db.saveReport(report);
+  console.log(`Report generated: ${stats.total} CVEs, ${stats.critical} critical, ${stats.kevCount} KEV`);
+}
+
+// Slim down CVE objects for the report (avoid storing full JSON blobs)
+function simplify(item) {
+  const id = extractItemId(item) || item.id || '';
+  return {
+    id,
+    cvss: item._cvss || extractCvssScore(item) || null,
+    vendor: item._vendor || '',
+    kev: item._kev || 0,
+    exploit: item._exploit || 0,
+    patch: item._patch || 0,
+    published: extractItemDate(item) ? extractItemDate(item).toISOString() : null,
+    discovered: item._discovered || null,
+    summary: extractSummary(item) || ''
+  };
+}
+
+// =========================================================================
 //  GEO-IP CACHE (in-memory, avoid hammering free API)
 // =========================================================================
 const _geoIpCache = new Map();
@@ -520,11 +725,19 @@ app.get('/api/cves/more', async (req, res) => {
   res.json(cves);
 });
 
+// News sources list
+app.get('/api/news-sources', (req, res) => {
+  const sources = db.getNewsSources();
+  res.json(sources);
+});
+
 // News from database
 app.get('/api/rss', (req, res) => {
   const count = Math.min(parseInt(req.query.count || '50', 10), 200);
   const offset = parseInt(req.query.offset || '0', 10);
-  const news = db.getNews(count, offset);
+  const sourceParam = req.query.source || '';
+  const sources = sourceParam ? sourceParam.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const news = db.getNews(count, offset, sources.length > 0 ? sources : undefined);
   res.json(news);
 });
 
@@ -681,10 +894,241 @@ function updateCveDailyCounts() {
 //  PUBLIC SETTINGS (safe subset for frontend)
 // =========================================================================
 app.get('/api/settings/public', (req, res) => {
+  const links = settings.links || { name: 'Links', items: [] };
   res.json({
     siteName: settings.siteName || 'Security dashboard',
-    logo: settings.logo || ''
+    logo: settings.logo || '',
+    links,
+    animatedBackground: settings.animatedBackground !== false
   });
+});
+
+// Report data (supports ?period=week or ?period=month, ?vendor=name)
+app.get('/api/report', (req, res) => {
+  try {
+    const period = req.query.period === 'week' ? 'week' : 'month';
+    const days = period === 'week' ? 7 : 30;
+    const vendorParam = req.query.vendor || null;
+    const vendor = vendorParam ? vendorParam.split(',').map(v => v.trim()).filter(Boolean) : null;
+    const stats = db.getReportStats(days, vendor);
+    const topVendors = vendor ? db.getTopVendorsWithBreakdown(days, vendor.length, vendor) : db.getTopVendorsWithBreakdown(days, 8);
+    const kevCves = db.getReportCves({ days, kevOnly: true, vendor });
+    const highNoPatch = db.getReportCves({ days, minCvss: 8, noPatchOnly: true, limit: 50, vendor });
+    const critWithPatch = db.getReportCves({ days, minCvss: 9, patchOnly: true, limit: 50, vendor });
+    res.json({
+      period,
+      days,
+      generatedAt: new Date().toISOString(),
+      stats,
+      topVendors,
+      kevCves: kevCves.map(simplify),
+      highNoPatch: highNoPatch.map(simplify),
+      critWithPatch: critWithPatch.map(simplify)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Vendor list for filter dropdown
+app.get('/api/vendors', (req, res) => {
+  try {
+    const days = req.query.days ? parseInt(req.query.days, 10) : 30;
+    const vendors = db.getVendorList(Math.min(days, 365));
+    res.json(vendors);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Top vendors for dashboard donut chart
+app.get('/api/top-vendors', (req, res) => {
+  try {
+    const vendors = db.getTopVendors(30, 7);
+    res.json(vendors);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// =========================================================================
+//  TOOLS API ROUTES
+// =========================================================================
+const dns = require('dns');
+const { promisify } = require('util');
+const dnsResolve4 = promisify(dns.resolve4);
+const dnsResolve6 = promisify(dns.resolve6);
+const dnsResolveMx = promisify(dns.resolveMx);
+const dnsResolveTxt = promisify(dns.resolveTxt);
+const dnsResolveNs = promisify(dns.resolveNs);
+
+// 1. Website security headers
+app.get('/api/tools/headers', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).json({ error: 'url parameter required' });
+  // Validate URL format
+  let parsed;
+  try { parsed = new URL(url); } catch (e) { return res.status(400).json({ error: 'Invalid URL' }); }
+  if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).json({ error: 'Only http/https URLs allowed' });
+  // Block private/internal IPs
+  const hostname = parsed.hostname;
+  if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|0\.0\.0\.0|\[::1\])/i.test(hostname)) {
+    return res.status(400).json({ error: 'Internal addresses not allowed' });
+  }
+  try {
+    const resp = await fetch(url, { method: 'GET', redirect: 'follow', timeout: 10000, headers: { 'User-Agent': 'SecurityDashboard/1.0' } });
+    const headers = {};
+    resp.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
+    res.json({ status: resp.status, headers });
+  } catch (e) {
+    res.status(502).json({ error: 'Failed to fetch: ' + (e.message || 'Unknown error') });
+  }
+});
+
+// 2. DNS record lookup
+app.get('/api/tools/dns', async (req, res) => {
+  const domain = req.query.domain;
+  if (!domain) return res.status(400).json({ error: 'domain parameter required' });
+  // Basic domain validation
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}$/.test(domain)) {
+    return res.status(400).json({ error: 'Invalid domain format' });
+  }
+  const result = {};
+  try { result.A = await dnsResolve4(domain); } catch (e) { result.A = []; }
+  try { result.AAAA = await dnsResolve6(domain); } catch (e) { result.AAAA = []; }
+  try { result.MX = await dnsResolveMx(domain); } catch (e) { result.MX = []; }
+  try { result.TXT = await dnsResolveTxt(domain); } catch (e) { result.TXT = []; }
+  try { result.NS = await dnsResolveNs(domain); } catch (e) { result.NS = []; }
+
+  // Discover subdomains via HackerTarget API + common prefixes
+  const commonSubs = ['www','mail','ftp','smtp','pop','imap','webmail','ns1','ns2','mx','vpn','remote','api','app','dev','staging','test','cdn','cloud','portal','admin','blog','shop','store','git','ci','docs','status','monitor','dashboard'];
+  const fqdns = new Set(commonSubs.map(s => s + '.' + domain.toLowerCase()));
+  try {
+    const htResp = await fetch('https://api.hackertarget.com/hostsearch/?q=' + encodeURIComponent(domain), { timeout: 8000 });
+    if (htResp.ok) {
+      const text = await htResp.text();
+      const domLower = domain.toLowerCase();
+      text.split('\n').forEach(line => {
+        const host = (line.split(',')[0] || '').trim().toLowerCase();
+        if (host && host.endsWith('.' + domLower) && host !== domLower) fqdns.add(host);
+      });
+    }
+  } catch (e) { /* API lookup failed, continue with common list */ }
+  const subResults = {};
+  await Promise.all([...fqdns].map(async (fqdn) => {
+    try {
+      const ips = await dnsResolve4(fqdn);
+      if (ips && ips.length) subResults[fqdn] = ips;
+    } catch (e) { /* not found, skip */ }
+  }));
+  if (Object.keys(subResults).length) result.subdomains = subResults;
+
+  res.json(result);
+});
+
+// 3. Malware hash checker (MalwareBazaar)
+app.get('/api/tools/hash', async (req, res) => {
+  const hash = req.query.hash;
+  if (!hash) return res.status(400).json({ error: 'hash parameter required' });
+  if (!/^[a-fA-F0-9]{32,64}$/.test(hash)) return res.status(400).json({ error: 'Invalid hash format' });
+  try {
+    const resp = await fetch('https://mb-api.abuse.ch/api/v1/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'query=get_info&hash=' + encodeURIComponent(hash),
+      timeout: 15000
+    });
+    const data = await resp.json();
+    if (data.query_status === 'hash_not_found' || data.query_status === 'no_results') {
+      res.json({ found: false });
+    } else if (data.data && data.data.length > 0) {
+      const d = data.data[0];
+      res.json({
+        found: true,
+        malware: d.signature || d.tags?.join(', ') || 'Unknown',
+        source: 'MalwareBazaar (abuse.ch)',
+        firstSeen: d.first_seen || '',
+        lastSeen: d.last_seen || '',
+        signature: d.signature || '',
+        detections: d.intelligence?.uploads || ''
+      });
+    } else {
+      res.json({ found: false });
+    }
+  } catch (e) {
+    res.status(502).json({ error: 'Lookup failed: ' + (e.message || 'Unknown error') });
+  }
+});
+
+// 4. IP Scout (ip-api.com — free, no key)
+app.get('/api/tools/ip', async (req, res) => {
+  const ip = req.query.ip;
+  if (!ip) return res.status(400).json({ error: 'ip parameter required' });
+  // Block private ranges
+  if (/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|0\.0\.0\.0|::1)/i.test(ip)) {
+    return res.status(400).json({ error: 'Private/internal IPs not allowed' });
+  }
+  try {
+    const resp = await fetch('http://ip-api.com/json/' + encodeURIComponent(ip) + '?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,reverse,query', { timeout: 10000 });
+    const data = await resp.json();
+    if (data.status === 'fail') return res.status(400).json({ error: data.message || 'Lookup failed' });
+    res.json({
+      country: data.country,
+      countryCode: data.countryCode,
+      region: data.regionName,
+      city: data.city,
+      isp: data.isp,
+      org: data.org,
+      as: data.as,
+      lat: data.lat,
+      lon: data.lon,
+      timezone: data.timezone,
+      reverse: data.reverse
+    });
+  } catch (e) {
+    res.status(502).json({ error: 'Lookup failed: ' + (e.message || 'Unknown error') });
+  }
+});
+
+// 5. Port & Vulnerability Check (Shodan InternetDB — free, no key)
+app.get('/api/tools/ports', async (req, res) => {
+  let target = req.query.target;
+  if (!target) return res.status(400).json({ error: 'target parameter required' });
+  // If domain, resolve to IP first
+  let ip = target;
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(target)) {
+    try {
+      const addrs = await dnsResolve4(target);
+      if (addrs && addrs.length) ip = addrs[0];
+      else return res.status(400).json({ error: 'Could not resolve domain' });
+    } catch (e) {
+      return res.status(400).json({ error: 'Could not resolve domain: ' + (e.message || '') });
+    }
+  }
+  // Block private ranges
+  if (/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|0\.0\.0\.0)/i.test(ip)) {
+    return res.status(400).json({ error: 'Private/internal IPs not allowed' });
+  }
+  try {
+    const resp = await fetch('https://internetdb.shodan.io/' + encodeURIComponent(ip), { timeout: 10000 });
+    if (!resp.ok) {
+      if (resp.status === 404) return res.json({ ip, ports: [], vulns: [], error: 'No data found for this IP in Shodan InternetDB' });
+      throw new Error('Shodan API error ' + resp.status);
+    }
+    const data = await resp.json();
+    const ports = (data.ports || []).map(p => ({ port: p, transport: 'tcp' }));
+    res.json({
+      ip: data.ip || ip,
+      hostnames: data.hostnames || [],
+      ports,
+      vulns: data.vulns || [],
+      os: data.os || null,
+      org: null,
+      isp: null
+    });
+  } catch (e) {
+    res.status(502).json({ error: 'Lookup failed: ' + (e.message || 'Unknown error') });
+  }
 });
 
 // =========================================================================
@@ -703,6 +1147,12 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   console.log('Polling CVEs...');
   await pollCves();
 
+  // KEV catalog
+  await pollKev();
+
+  // Enrich existing CVEs with vendor/exploit/patch metadata
+  enrichExistingCves();
+
   // Backfill CVEs from NVD if DB is sparse (rate-limited, runs in background)
   backfillCvesFromNvd().catch(e => console.error('backfillCves error:', e && e.message));
   console.log('Polling News...');
@@ -712,6 +1162,9 @@ const PORT = settings.server.port || process.env.PORT || 3000;
 
   // Update CVE daily counts
   updateCveDailyCounts();
+
+  // Generate initial report
+  generateReport();
 
   // Fast service polls for UI responsiveness
   await pollMicrosoftFast().catch(() => {});
@@ -726,6 +1179,26 @@ const PORT = settings.server.port || process.env.PORT || 3000;
     await checkServices();
     updateCveDailyCounts();
   }, settings.polling.uptimeIntervalMinutes * 60 * 1000);
+
+  // KEV: poll every 6 hours
+  setInterval(() => pollKev().catch(() => {}), 6 * 60 * 60 * 1000);
+
+  // Daily report generation at 03:00
+  function scheduleDaily() {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(3, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    const ms = next.getTime() - now.getTime();
+    setTimeout(() => {
+      enrichExistingCves();
+      generateReport();
+      // Reschedule for next day
+      setInterval(() => { enrichExistingCves(); generateReport(); }, 24 * 60 * 60 * 1000);
+    }, ms);
+    console.log(`Next report scheduled at ${next.toISOString()}`);
+  }
+  scheduleDaily();
 
   app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
 })();

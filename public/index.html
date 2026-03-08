@@ -24,8 +24,8 @@
     html,body{height:100%}
     body{
       margin:0;font-family:geist-sans,Inter,Arial,Helvetica,sans-serif;color:#efe8ff;
-      background:linear-gradient(135deg,var(--bg-1) 0%, var(--bg-2) 40%, #1b0033 60%);
-      overflow:hidden;height:100vh;background-attachment:fixed;
+      background:#0a0015;
+      overflow:hidden;height:100vh;
     }
     /* honeycomb overlay using SVG data URI */
     body::before{
@@ -240,7 +240,8 @@
     .footer-github svg.feather{margin-right:4px;transform:translateY(-0.08em);height:0.95em;width:0.95em}
     /* site footer: always fixed at bottom, auto-height, opaque */
     #site-footer{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);color:rgba(255,255,255,0.92);font-size:0.85rem;z-index:120;padding:15px 0 11px;pointer-events:auto;box-sizing:border-box}
-    .footer-inner{max-width:1100px;width:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 12px;box-sizing:border-box}
+    .footer-inner{max-width:1100px;width:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 12px;box-sizing:border-box;position:relative}
+    #anim-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:transparent;cursor:pointer;padding:8px;margin:0;width:28px;height:28px;opacity:0}
     .footer-spacer{display:none}
     #main-content{position:fixed;top:var(--header-height);bottom:var(--footer-height);left:0;right:0;display:flex;flex-direction:column;padding:8px 20px;box-sizing:border-box;overflow-y:auto;overflow-x:hidden}
     .top-panels{flex-shrink:0}
@@ -250,6 +251,21 @@
     #header-search .search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);opacity:0.5}
     #header-search .search-icon svg{width:14px;height:14px}
     #header-search input{padding-left:28px}
+    /* Report dropdown */
+    .report-dropdown{position:relative;display:inline-flex}
+    .report-dropdown-btn{display:inline-flex;align-items:center;gap:4px;font-size:0.82em;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s}
+    .report-dropdown-btn:hover{background:rgba(255,255,255,0.08);color:#fff}
+    .report-dropdown-btn svg{width:14px;height:14px}
+    .report-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:150px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);backdrop-filter:blur(12px);overflow:hidden}
+    .report-dropdown-menu.open{display:block}
+    .report-dropdown-menu a{display:flex;align-items:center;gap:8px;padding:10px 14px;color:#efe8ff;text-decoration:none;font-size:0.85em;font-weight:500;transition:background 0.12s}
+    .report-dropdown-menu a:hover{background:rgba(255,255,255,0.06)}
+    .report-dropdown-menu a svg{width:14px;height:14px;opacity:0.6}
+    html.light-theme .report-dropdown-btn{background:rgba(40,20,60,0.04);border-color:rgba(100,60,140,0.12);color:rgba(40,20,60,0.6)}
+    html.light-theme .report-dropdown-btn:hover{background:rgba(40,20,60,0.08);color:rgba(40,20,60,0.88)}
+    html.light-theme .report-dropdown-menu{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12);box-shadow:0 8px 24px rgba(100,60,140,0.15)}
+    html.light-theme .report-dropdown-menu a{color:#1a0a2e}
+    html.light-theme .report-dropdown-menu a:hover{background:rgba(100,60,140,0.06)}
     /* Theme toggle button */
     #theme-toggle{background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;padding:6px;margin-left:12px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:color 0.2s}
     #theme-toggle:hover{color:#fff}
@@ -263,8 +279,9 @@
     }
     html.light-theme body{
       color:#1a0a2e;
-      background:linear-gradient(135deg,#ffffff 0%,#ffffff 40%,#ffffff 60%);
+      background:linear-gradient(135deg,#ffffff 0%,#ffffff 40%,#ffffff 60%) !important;
     }
+    html.light-theme #synthwave-canvas{display:none}
     html.light-theme body::before{opacity:0.03}
     html.light-theme header{background:linear-gradient(135deg,#f0edf5 0%,#e8e0f0 100%);color:rgba(40,20,60,0.88)}
     html.light-theme #site-footer{background:linear-gradient(135deg,#f0edf5 0%,#e8e0f0 100%);color:rgba(40,20,60,0.88)}
@@ -294,6 +311,31 @@
     html.light-theme #useful-links-inline a:hover{color:#1a0a2e}
     html.light-theme .services-label{color:rgba(40,20,60,0.55) !important}
     html.light-theme .status-item div{color:rgba(40,20,60,0.6) !important}
+    /* Links dropdown (same style as report dropdown) */
+    .links-dropdown{position:relative;display:inline-flex}
+    .links-dropdown-btn{display:inline-flex;align-items:center;gap:4px;font-size:0.82em;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s}
+    .links-dropdown-btn:hover{background:rgba(255,255,255,0.08);color:#fff}
+    .links-dropdown-btn svg{width:14px;height:14px}
+    .links-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:240px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);backdrop-filter:blur(12px);overflow:hidden}
+    .links-dropdown-menu.open{display:block}
+    .links-dropdown-menu a{display:flex;align-items:center;gap:8px;padding:10px 14px;color:#efe8ff;text-decoration:none;font-size:0.85em;font-weight:500;transition:background 0.12s}
+    .links-dropdown-menu a:hover{background:rgba(255,255,255,0.06)}
+    .links-dropdown-menu a svg{width:14px;height:14px;opacity:0.6}
+    html.light-theme .links-dropdown-btn{background:rgba(40,20,60,0.04);border-color:rgba(100,60,140,0.12);color:rgba(40,20,60,0.6)}
+    html.light-theme .links-dropdown-btn:hover{background:rgba(40,20,60,0.08);color:rgba(40,20,60,0.88)}
+    html.light-theme .links-dropdown-menu{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12);box-shadow:0 8px 24px rgba(100,60,140,0.15)}
+    html.light-theme .links-dropdown-menu a{color:#1a0a2e}
+    html.light-theme .links-dropdown-menu a:hover{background:rgba(100,60,140,0.06)}
+    /* CVE enrichment badges */
+    .cve-badges{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
+    .badge{display:inline-block;padding:2px 7px;border-radius:999px;font-size:0.72em;font-weight:600;letter-spacing:0.02em}
+    .badge-kev{background:#e74c3c;color:#fff}
+    .badge-exploit{background:#e67e22;color:#fff}
+    .badge-patch{background:#2ecc71;color:#fff}
+    .badge-no{background:rgba(255,255,255,0.08);color:var(--muted)}
+    .badge-nopatch{background:rgba(255,77,77,0.12);color:#ff6b6b}
+    html.light-theme .badge-no{background:rgba(40,20,60,0.06);color:rgba(40,20,60,0.5)}
+    html.light-theme .badge-nopatch{background:rgba(200,40,40,0.08);color:#c0392b}
   </style>
 </head>
 <body>
@@ -301,15 +343,26 @@
   <!-- Header -->
   <header style="display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="logo"><i data-feather="cloud" style="vertical-align:middle"></i></div>
-        <div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div>
+        <a href="/" style="text-decoration:none"><div class="logo"><i data-feather="cloud" style="vertical-align:middle"></i></div></a>
+        <a href="/" style="text-decoration:none"><div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div></a>
         <div id="header-search" style="margin-left:10px;display:flex;align-items:center">
           <span class="search-icon"><i data-feather="search"></i></span>
           <input id="cve-search" placeholder="     Search CVE's" style="padding:6px 10px 6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:inherit;width:200px;font-size:0.85em">
         </div>
+        <div class="report-dropdown" id="report-dropdown" style="margin-left:8px">
+          <button class="report-dropdown-btn" id="report-dropdown-btn" type="button"><i data-feather="file-text"></i> Report <i data-feather="chevron-down" style="width:12px;height:12px;opacity:0.5"></i></button>
+          <div class="report-dropdown-menu" id="report-dropdown-menu">
+            <a href="/report.html?period=week"><i data-feather="calendar"></i> Last Week</a>
+            <a href="/report.html?period=month"><i data-feather="calendar"></i> Last Month</a>
+          </div>
+        </div>
+        <div class="links-dropdown" id="links-dropdown" style="margin-left:4px">
+          <button class="links-dropdown-btn" id="links-dropdown-btn" type="button"><i data-feather="external-link"></i> <span id="links-dropdown-label">Links</span> <i data-feather="chevron-down" style="width:12px;height:12px;opacity:0.5"></i></button>
+          <div class="links-dropdown-menu" id="links-dropdown-menu"></div>
+        </div>
+        <a href="/tools.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="tool"></i> Tools</a>
       </div>
     <div class="header-services" style="display:flex;gap:12px;align-items:center">
-      <div id="visitor-ip">Your IP: <span id="ip-addr">…</span> <span id="ip-flag"></span></div>
       <div class="services-label" style="font-size:0.95em;color:var(--muted);margin-right:6px">Services:</div>
       <div class="service-badges" style="display:flex;gap:8px;align-items:center">
         <div id="svc-cloudflare" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Cloudflare</div></div>
@@ -319,28 +372,30 @@
       <button id="theme-toggle" aria-label="Toggle theme"><i data-feather="sun"></i></button>
     </div>
   </header>
+    <!-- Animated starfield background -->
+    <canvas id="synthwave-canvas" style="position:fixed;inset:0;width:100%;height:100%;z-index:-1"></canvas>
     <!-- Info panels row -->
     <main id="main-content">
-    <section class="top-panels" style="display:flex;gap:16px;margin-bottom:16px">
-    <div class="card" style="flex:1;padding:10px;border-radius:6px;">
-      <div style="font-weight:600;margin-bottom:6px">Uptime for lundstream.net: <span id="uptime-pct" style="font-size:0.85em"></span></div>
-      <div id="uptime-chart" class="chart-panel" style="height:120px;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
-        <canvas id="uptime-canvas" width="400" height="120"></canvas>
+    <section class="top-panels" style="display:flex;gap:16px;margin-bottom:16px;align-items:flex-start">
+    <div class="card" style="flex:1;padding:10px;border-radius:6px;display:flex;flex-direction:column;">
+      <div style="font-weight:600;margin-bottom:2px">Uptime for lundstream.net: <span id="uptime-pct" style="font-size:0.85em"></span></div>
+      <div id="uptime-chart" class="chart-panel" style="height:120px;padding:2px 6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
+        <canvas id="uptime-canvas"></canvas>
       </div>
     </div>
-    <div class="card" style="flex:1;padding:10px;border-radius:6px;">
-      <div style="font-weight:600;margin-bottom:6px">CVE's per day:</div>
-      <div id="cve-chart" class="chart-panel" style="height:120px;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
-        <canvas id="cve-canvas" width="400" height="120"></canvas>
+    <div class="card" style="flex:1;padding:10px;border-radius:6px;display:flex;flex-direction:column;">
+      <div style="font-weight:600;margin-bottom:2px">
+        <span>CVE's per day:</span>
+      </div>
+      <div id="cve-chart" class="chart-panel" style="height:120px;padding:2px 6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
+        <canvas id="cve-canvas"></canvas>
       </div>
     </div>
     <div id="useful-card" class="card" style="flex:1;padding:10px;border-radius:6px;display:flex;flex-direction:column;">
-      <div>
-        <div style="font-weight:600">Useful links:</div>
-        <div id="useful-links-inline" style="display:flex;flex-direction:column;gap:6px;margin-top:6px;font-size:0.8em">
-          <a href="https://www.cisa.gov/" target="_blank">CISA - Cyber Defense Agency</a>
-          <a href="https://msrc.microsoft.com/" target="_blank">Microsoft - Security Response Center</a>
-          <a href="https://haveibeenpwned.com/" target="_blank">Have I Been Pwned - Check your passwords</a>
+      <div style="flex:1;display:flex;flex-direction:column;">
+        <div style="font-weight:600">Most Targeted Vendors last 30 Days:</div>
+        <div style="height:120px;margin-top:4px;display:flex;align-items:center;justify-content:center">
+          <canvas id="vendor-donut-canvas"></canvas>
         </div>
       </div>
     </div>
@@ -349,7 +404,7 @@
   <div class="container">
     <div class="left">
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <h1 style="display:flex;align-items:center"><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px"></i>Latest CVE's</h1>
+        <h1 style="display:flex;align-items:center"><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i>Latest CVE's</h1>
         <div style="display:flex;align-items:center;gap:8px">
           <label for="cvss-filter" style="font-size:0.95rem;color:var(--muted);margin-right:6px">Filter:</label>
           <div id="cvss-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
@@ -369,7 +424,18 @@
       </div>
     </div>
     <div class="right">
-      <h1><i data-feather="book-open" style="vertical-align:middle;margin-right:8px"></i>News</h1>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h1><i data-feather="book-open" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i>News</h1>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:0.95rem;color:var(--muted);margin-right:6px">Source:</label>
+          <div id="news-source-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
+            <button id="news-source-btn" class="filter-select" aria-expanded="false">All <span class="caret">▾</span></button>
+            <ul id="news-source-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true">
+              <li class="cvss-option" data-value="all" role="option" aria-selected="true">All</li>
+            </ul>
+          </div>
+        </div>
+      </div>
       <div id="news-list" class="list-scroll">
         <div id="news-items">Loading...</div>
         <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="news-load-more" style="display:none">Load more news</button></div>
@@ -400,6 +466,8 @@
         <span>Security dashboard on GitHub</span>
       </a>
       <span class="copyright">© 2026 lundstream.net, all rights reserved.</span>
+      <div id="visitor-ip" style="font-size:0.8em;color:var(--muted);display:flex;align-items:center;gap:6px">Your IP: <span id="ip-addr">…</span> <span id="ip-flag"></span></div>
+      <button id="anim-toggle" title="Toggle animation">✦</button>
     </div>
   </div>
 
@@ -417,6 +485,143 @@
       window.addEventListener('resize', function(){clearTimeout(window._mt);window._mt=setTimeout(measure,100)});
       document.addEventListener('DOMContentLoaded', function(){measure();setTimeout(measure,400);});
     })();
+  </script>
+  <!-- Animated starfield background -->
+  <script>
+  (function(){
+    const cv = document.getElementById('synthwave-canvas');
+    if(!cv) return;
+
+    // Check setting — fetch public settings and decide
+    fetch('/api/settings/public').then(r=>r.json()).then(function(cfg){
+      if(cfg.animatedBackground === false){
+        cv.style.display = 'none';
+        document.body.style.background = 'linear-gradient(135deg, #0f0620 0%, #2c0038 40%, #1b0033 60%)';
+        document.body.style.backgroundAttachment = 'fixed';
+        return;
+      }
+      // Check localStorage override
+      if(localStorage.getItem('animOff')==='1'){
+        cv.style.display = 'none';
+        document.body.style.background = 'linear-gradient(135deg, #0f0620 0%, #2c0038 40%, #1b0033 60%)';
+        document.body.style.backgroundAttachment = 'fixed';
+      } else {
+        startAnimation();
+      }
+      // Toggle button
+      var btn = document.getElementById('anim-toggle');
+      if(btn) btn.addEventListener('click', function(){
+        var off = localStorage.getItem('animOff')==='1';
+        if(off){
+          localStorage.removeItem('animOff');
+          location.reload();
+        } else {
+          localStorage.setItem('animOff','1');
+          location.reload();
+        }
+      });
+    }).catch(function(){ startAnimation(); });
+
+    function startAnimation(){
+    const ctx = cv.getContext('2d');
+    let W, H, dpr;
+
+    function resize(){
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = W * dpr; cv.height = H * dpr;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      initStars();
+    }
+
+    // Stars
+    const STAR_COUNT = 180;
+    let stars = [];
+    function initStars(){
+      stars = [];
+      for(let i=0;i<STAR_COUNT;i++){
+        stars.push({
+          x: Math.random()*W,
+          y: Math.random()*H,
+          r: Math.random()*1.4+0.3,
+          a: Math.random()*0.7+0.3,
+          twinkleSpeed: Math.random()*0.02+0.005,
+          twinklePhase: Math.random()*Math.PI*2
+        });
+      }
+    }
+
+    // Shooting stars
+    const shoots = [];
+    function spawnShoot(){
+      shoots.push({
+        x: Math.random()*W*0.8+W*0.1,
+        y: Math.random()*H*0.4,
+        vx: (Math.random()*3+2)*(Math.random()>0.5?1:-1),
+        vy: Math.random()*2+1.5,
+        life: 1,
+        len: Math.random()*60+40,
+        decay: Math.random()*0.012+0.008
+      });
+    }
+
+    let t = 0;
+    function draw(){
+      t++;
+      ctx.clearRect(0,0,W,H);
+
+      // Dark sky gradient (matching original body gradient 135deg)
+      const sky = ctx.createLinearGradient(0,0,W,H);
+      sky.addColorStop(0,'#0f0620');
+      sky.addColorStop(0.4,'#2c0038');
+      sky.addColorStop(0.6,'#1b0033');
+      sky.addColorStop(1,'#0f0620');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0,0,W,H);
+
+      // Draw stars
+      for(const s of stars){
+        const flicker = Math.sin(t*s.twinkleSpeed+s.twinklePhase)*0.35+0.65;
+        ctx.globalAlpha = s.a * flicker;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Draw shooting stars
+      if(Math.random()<0.008) spawnShoot();
+      for(let i=shoots.length-1;i>=0;i--){
+        const sh = shoots[i];
+        sh.x += sh.vx;
+        sh.y += sh.vy;
+        sh.life -= sh.decay;
+        if(sh.life<=0){ shoots.splice(i,1); continue; }
+        const dx = -sh.vx, dy = -sh.vy;
+        const mag = Math.sqrt(dx*dx+dy*dy);
+        const nx = dx/mag*sh.len, ny = dy/mag*sh.len;
+        const grad = ctx.createLinearGradient(sh.x,sh.y,sh.x+nx,sh.y+ny);
+        grad.addColorStop(0,'rgba(255,255,255,'+sh.life+')');
+        grad.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = sh.life;
+        ctx.beginPath();
+        ctx.moveTo(sh.x,sh.y);
+        ctx.lineTo(sh.x+nx,sh.y+ny);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      requestAnimationFrame(draw);
+    }
+
+    resize();
+    window.addEventListener('resize', resize);
+    draw();
+    }
+  })();
   </script>
 </body>
 </html>

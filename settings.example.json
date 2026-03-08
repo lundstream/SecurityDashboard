@@ -63,5 +63,6 @@
   ],
   "geoip": {
     "apiUrl": "http://ip-api.com/json/{ip}?fields=status,countryCode"
-  }
+  },
+  "animatedBackground": true
 }

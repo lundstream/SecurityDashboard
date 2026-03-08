@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vulnerability Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root{
+      --bg-1:#0f0620;
+      --bg-2:#2c0038;
+      --accent-pink:#ff4da6;
+      --accent-purple:#8400ff;
+      --card-bg:rgba(47, 0, 59, 0.726);
+      --muted:rgba(255,255,255,0.6);
+      --header-height:72px;
+      --footer-height:56px;
+    }
+    html,body{height:100%}
+    body{
+      margin:0;font-family:geist-sans,Inter,Arial,Helvetica,sans-serif;color:#efe8ff;
+      background:#0a0015;
+      overflow:hidden;height:100vh;
+    }
+    body::before{
+      content:"";position:fixed;inset:0;opacity:0.08;pointer-events:none;z-index:0;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='173' viewBox='0 0 200 173'><defs><pattern id='h' width='40' height='34' patternUnits='userSpaceOnUse'><polygon points='20,0 40,10 40,24 20,34 0,24 0,10' fill='%23ffffff' opacity='0.06'/></pattern></defs><rect width='100%25' height='100%25' fill='url(%23h)'/></svg>");
+      background-repeat:repeat;mix-blend-mode:overlay;filter:blur(0.4px) saturate(120%);
+    }
+    header{position:fixed;top:0;left:0;right:0;z-index:125;background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);padding:13px 20px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between}
+    h1,h2,h3{margin:0;font-family:geist-mono,Inter,sans-serif;font-weight:700}
+    .card{background:var(--card-bg);border:1px solid rgba(255,255,255,0.06);padding:12px;margin:10px 0;border-radius:10px;box-shadow:0 6px 18px rgba(11,3,28,0.45)}
+    .card:hover{box-shadow:0 5px 10px rgba(128,12,70,0.144);background:rgba(255,255,255,0.010)}
+    .meta{color:var(--muted);font-size:0.9em}
+    .tag{display:inline-block;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#fff;padding:4px 8px;border-radius:999px;margin-left:8px;font-size:0.8em}
+    button{background:var(--accent-purple);color:#fff;border:none;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:600}
+    button:hover{filter:brightness(1.18)}
+    .site-title{font-family:geist-mono,Orbitron,Inter,Arial;font-weight:700;color:#fff}
+    .logo{width:56px;height:56px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#111;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));box-shadow:0 6px 20px rgba(123,44,255,0.18)}
+    .logo svg.feather,.logo i{height:1.5em !important;width:1.5em !important;color:#fff}
+    svg.feather{vertical-align:middle;height:1em;width:1em;display:inline-block;margin-right:0.4rem;transform:translateY(-0.12em)}
+    #theme-toggle{background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;padding:6px;margin-left:12px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+    #theme-toggle:hover{color:#fff}
+    #theme-toggle svg{width:20px;height:20px}
+    #site-footer{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);color:rgba(255,255,255,0.92);font-size:0.85rem;z-index:120;padding:15px 0 11px;pointer-events:auto;box-sizing:border-box}
+    .footer-inner{max-width:1100px;width:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 12px;box-sizing:border-box;position:relative}
+    #anim-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:transparent;cursor:pointer;padding:8px;margin:0;width:28px;height:28px;opacity:0}
+    .footer-github{display:inline-flex;align-items:center;gap:4px}
+    .footer-github svg.feather{margin-right:4px;transform:translateY(-0.08em);height:0.95em;width:0.95em}
+    #main-content{position:fixed;top:var(--header-height);bottom:var(--footer-height);left:0;right:0;display:flex;flex-direction:column;padding:8px 20px;box-sizing:border-box;overflow-y:auto;overflow-x:hidden}
+    /* Report specific */
+    .report-section{margin-bottom:24px}
+    .report-section h2{font-size:1.15rem;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+    .stat-grid{display:flex;gap:16px;flex-wrap:wrap}
+    .stat-card{flex:1;min-width:180px;padding:16px;text-align:center}
+    .stat-number{font-size:2.2rem;font-weight:700;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .stat-label{color:var(--muted);font-size:0.85em;margin-top:4px}
+    .chart-container{position:relative;height:260px;padding:10px}
+    .report-list .card{padding:10px}
+    .report-list{max-height:520px;overflow-y:auto;padding-right:4px;overscroll-behavior:contain;
+      scrollbar-color:rgba(120,41,255,0.151) transparent}
+    .report-list::-webkit-scrollbar{width:10px;height:10px}
+    .report-list::-webkit-scrollbar-track{background:transparent}
+    .report-list::-webkit-scrollbar-thumb{background:rgba(123,44,255,0.35);border-radius:10px;border:2px solid rgba(0,0,0,0.08)}
+    .load-more-btn{display:inline-block;padding:8px 14px;margin-top:8px;background:var(--accent-purple);color:#fff;border:none;border-radius:999px;font-size:0.85em;font-weight:600;cursor:pointer;text-align:center}
+    .load-more-btn:hover{filter:brightness(1.18)}
+    html.light-theme .load-more-btn{background:var(--accent-purple);color:#fff}
+    html.light-theme .load-more-btn:hover{filter:brightness(1.18)}
+    html.light-theme .report-list{scrollbar-color:rgba(120,41,255,0.2) transparent}
+    html.light-theme .report-list::-webkit-scrollbar-thumb{background:rgba(120,41,255,0.2)}
+    /* Vendor filter */
+    .vendor-filter{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+    .vendor-filter-wrap{position:relative;flex:1;max-width:300px}
+    .vendor-filter-wrap input{width:100%;padding:8px 12px 8px 32px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:inherit;font-size:0.85em;box-sizing:border-box}
+    .vendor-filter-wrap .vf-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);opacity:0.5}
+    .vendor-filter-wrap .vf-icon svg{width:14px;height:14px}
+    .vendor-filter-list{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;max-height:200px;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);display:none}
+    .vendor-filter-list.open{display:block}
+    .vendor-filter-list .vf-item{padding:8px 12px;cursor:pointer;font-size:0.85em;transition:background 0.1s}
+    .vendor-filter-list .vf-item:hover{background:rgba(255,255,255,0.06)}
+    .vendor-filter-list .vf-item.selected{background:rgba(132,0,255,0.15)}
+    .vendor-filter-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(132,0,255,0.2);color:var(--accent-purple);padding:4px 10px;border-radius:999px;font-size:0.8em;font-weight:600;cursor:pointer}
+    .vendor-filter-tag:hover{background:rgba(132,0,255,0.3)}
+    html.light-theme .vendor-filter-wrap input{background:rgba(100,60,140,0.06);border-color:rgba(100,60,140,0.12);color:#1a0a2e}
+    html.light-theme .vendor-filter-list{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12)}
+    html.light-theme .vendor-filter-list .vf-item:hover{background:rgba(100,60,140,0.06)}
+    .badge{display:inline-block;padding:2px 7px;border-radius:999px;font-size:0.72em;font-weight:600;letter-spacing:0.02em}
+    .badge-kev{background:#e74c3c;color:#fff}
+    .badge-exploit{background:#e67e22;color:#fff}
+    .badge-patch{background:#2ecc71;color:#fff}
+    .badge-nopatch{background:rgba(255,77,77,0.12);color:#ff6b6b}
+    .badge-no{background:rgba(255,255,255,0.08);color:var(--muted)}
+    .cve-badges{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
+    #cve-items a,#news-items a,.report-list a{color:#fff;text-decoration:none}
+    #cve-items a:hover,#news-items a:hover,.report-list a:hover{color:#fff;text-decoration:underline}
+    .desc{font-family:'Geist Sans',Inter,Arial,Helvetica,sans-serif;color:var(--muted);font-size:0.95em;margin-top:6px}
+    .generated-at{color:var(--muted);font-size:0.8em;margin-top:4px}
+    /* Light theme */
+    html.light-theme{--bg-1:#f0edf5;--bg-2:#e8e0f0;--card-bg:rgba(255,255,255,0.85);--muted:rgba(40,20,60,0.6)}
+    html.light-theme body{color:#1a0a2e;background:linear-gradient(135deg,#ffffff 0%,#ffffff 40%,#ffffff 60%) !important}
+    html.light-theme #synthwave-canvas{display:none}
+    html.light-theme body::before{opacity:0.03}
+    html.light-theme header{background:linear-gradient(135deg,#f0edf5 0%,#e8e0f0 100%);color:rgba(40,20,60,0.88)}
+    html.light-theme #site-footer{background:linear-gradient(135deg,#f0edf5 0%,#e8e0f0 100%);color:rgba(40,20,60,0.88)}
+    html.light-theme .site-title{color:#1a0a2e}
+    html.light-theme .card{background:var(--card-bg);border:1px solid rgba(100,60,140,0.1);box-shadow:0 4px 12px rgba(100,60,140,0.08)}
+    html.light-theme .card:hover{background:rgba(20,0,43,0.055);box-shadow:0 5px 14px rgba(100,60,140,0.12)}
+    html.light-theme .report-list a{color:#1a0a2e}
+    html.light-theme .report-list a:hover{color:#8400ff}
+    html.light-theme .desc{color:rgba(40,20,60,0.55)}
+    html.light-theme .meta{color:rgba(40,20,60,0.55)}
+    html.light-theme .footer-github,html.light-theme .footer-github span{color:rgba(40,20,60,0.75) !important}
+    html.light-theme .copyright{color:rgba(40,20,60,0.6)}
+    html.light-theme #theme-toggle{color:rgba(40,20,60,0.6)}
+    html.light-theme #theme-toggle:hover{color:#1a0a2e}
+    html.light-theme .badge-no{background:rgba(40,20,60,0.06);color:rgba(40,20,60,0.5)}
+    html.light-theme .badge-nopatch{background:rgba(200,40,40,0.08);color:#c0392b}
+    html.light-theme .chart-container{background:linear-gradient(180deg,rgba(100,60,140,0.02),rgba(100,60,140,0.04));border-radius:10px}
+    /* Visitor IP display */
+    #visitor-ip{font-size:0.8em;color:var(--muted);display:flex;align-items:center;gap:6px}
+    #visitor-ip .ip-flag{width:20px;height:14px;border-radius:2px;vertical-align:middle}
+    /* Export PDF button */
+    .export-btn{display:inline-flex;align-items:center;gap:6px;background:var(--accent-purple);color:#fff;border:none;padding:8px 16px;border-radius:999px;font-size:0.85em;font-weight:600;cursor:pointer;font-family:inherit}
+    .export-btn:hover{filter:brightness(1.18)}
+    .export-btn svg{width:16px;height:16px}
+    @media(max-width:600px){
+      header{flex-direction:column;align-items:flex-start;gap:10px}
+      .logo{width:40px;height:40px}
+      .site-title{font-size:1rem}
+      .stat-grid{flex-direction:column}
+      .stat-card{min-width:auto}
+    }
+  </style>
+</head>
+<body>
+  <canvas id="synthwave-canvas" style="position:fixed;inset:0;width:100%;height:100%;z-index:-1"></canvas>
+  <script>if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light-theme');</script>
+  <header>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="/" style="text-decoration:none"><div class="logo"><i data-feather="cloud" style="vertical-align:middle"></i></div></a>
+      <a href="/" style="text-decoration:none"><div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div></a>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <a href="/" style="color:var(--muted);text-decoration:none;font-size:0.9em;display:inline-flex;align-items:center;gap:4px"><i data-feather="arrow-left" style="width:14px;height:14px"></i> Dashboard</a>
+      <button id="theme-toggle" aria-label="Toggle theme"><i data-feather="sun"></i></button>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <div style="max-width:900px;margin:0 auto;width:100%">
+      <h1 style="font-size:1.4rem;margin-bottom:4px;display:flex;align-items:center;gap:8px"><i data-feather="file-text"></i> <span id="report-title">Vulnerability Report</span></h1>
+      <div class="generated-at" id="report-generated">Loading report data...</div>
+
+      <!-- Export PDF -->
+      <div style="margin-top:12px;display:flex;align-items:center;gap:12px">
+        <button class="export-btn" id="export-pdf-btn" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export to PDF</button>
+      </div>
+
+      <!-- Vendor filter -->
+      <div class="vendor-filter" style="margin-top:12px">
+        <span style="font-size:0.85em;color:var(--muted)">Filter by vendor:</span>
+        <div class="vendor-filter-wrap">
+          <span class="vf-icon"><i data-feather="search"></i></span>
+          <input type="text" id="vendor-search" placeholder="Search vendors..." autocomplete="off">
+          <div class="vendor-filter-list" id="vendor-list"></div>
+        </div>
+        <span id="vendor-tag"></span>
+      </div>
+
+      <!-- Summary stats -->
+      <section class="report-section" style="margin-top:16px">
+        <h2 id="summary-title">Summary</h2>
+        <div class="stat-grid">
+          <div class="card stat-card">
+            <div class="stat-number" id="stat-total">-</div>
+            <div class="stat-label">New vulnerabilities published</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-number" id="stat-critical">-</div>
+            <div class="stat-label">Critical vulnerabilities (CVSS ≥ 9)</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-number" id="stat-kev">-</div>
+            <div class="stat-label" id="stat-kev-label">Known exploited (KEV)</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Top vendors chart -->
+      <section class="report-section">
+        <h2 id="vendor-title"><i data-feather="bar-chart-2" style="width:18px;height:18px"></i> Most Targeted Vendors</h2>
+        <div class="card">
+          <div class="chart-container">
+            <canvas id="vendor-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- KEV list -->
+      <section class="report-section">
+        <h2 id="kev-title"><i data-feather="alert-octagon" style="width:18px;height:18px"></i> Known Exploited Vulnerabilities (KEV)</h2>
+        <div class="report-list">
+          <div id="kev-list">Loading...</div>
+          <div style="text-align:center;padding:8px 0"><button class="load-more-btn" id="kev-more" style="display:none">Load more</button></div>
+        </div>
+      </section>
+
+      <!-- 9+ with patch -->
+      <section class="report-section">
+        <h2 id="patched-title"><i data-feather="check-circle" style="width:18px;height:18px"></i> CVSS 9+ — Patch Available</h2>
+        <div class="report-list">
+          <div id="patched-list">Loading...</div>
+          <div style="text-align:center;padding:8px 0"><button class="load-more-btn" id="patched-more" style="display:none">Load more</button></div>
+        </div>
+      </section>
+
+      <!-- 8+ no patch -->
+      <section class="report-section">
+        <h2 id="nopatch-title"><i data-feather="shield-off" style="width:18px;height:18px"></i> CVSS 8+ — No Patch Available</h2>
+        <div class="report-list">
+          <div id="nopatch-list">Loading...</div>
+          <div style="text-align:center;padding:8px 0"><button class="load-more-btn" id="nopatch-more" style="display:none">Load more</button></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="site-footer">
+    <div class="footer-inner">
+      <a class="footer-github" href="https://github.com/lundstream/SecurityDashboard" target="_blank" rel="noopener" style="color:rgba(255,255,255,0.788);text-decoration:none">
+        <i data-feather="github" style="vertical-align:middle"></i>
+        <span>Security dashboard on GitHub</span>
+      </a>
+      <span class="copyright">© 2026 lundstream.net, all rights reserved.</span>
+      <div id="visitor-ip">Your IP: <span id="ip-addr">…</span> <span id="ip-flag"></span></div>
+      <button id="anim-toggle" title="Toggle animation">✦</button>
+    </div>
+  </div>
+
+  <script src="/report.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      function tryReplace(){
+        if(window.feather){ try{ feather.replace(); }catch(e){} }
+        else { setTimeout(tryReplace, 200); }
+      }
+      tryReplace();
+    });
+    (function(){
+      function measure(){
+        var h=document.querySelector('header');
+        var f=document.getElementById('site-footer');
+        if(h) document.documentElement.style.setProperty('--header-height', h.offsetHeight+'px');
+        if(f) document.documentElement.style.setProperty('--footer-height', f.offsetHeight+'px');
+      }
+      window.addEventListener('resize', function(){clearTimeout(window._mt);window._mt=setTimeout(measure,100)});
+      document.addEventListener('DOMContentLoaded', function(){measure();setTimeout(measure,400);});
+    })();
+  </script>
+  <!-- Animated starfield background -->
+  <script>
+  (function(){
+    const cv = document.getElementById('synthwave-canvas');
+    if(!cv) return;
+    fetch('/api/settings/public').then(r=>r.json()).then(function(cfg){
+      if(cfg.animatedBackground === false){
+        cv.style.display = 'none';
+        document.body.style.background = 'linear-gradient(135deg, #0f0620 0%, #2c0038 40%, #1b0033 60%)';
+        document.body.style.backgroundAttachment = 'fixed';
+        return;
+      }
+      if(localStorage.getItem('animOff')==='1'){
+        cv.style.display = 'none';
+        document.body.style.background = 'linear-gradient(135deg, #0f0620 0%, #2c0038 40%, #1b0033 60%)';
+        document.body.style.backgroundAttachment = 'fixed';
+      } else {
+        startAnimation();
+      }
+      var btn = document.getElementById('anim-toggle');
+      if(btn) btn.addEventListener('click', function(){
+        var off = localStorage.getItem('animOff')==='1';
+        if(off){ localStorage.removeItem('animOff'); location.reload(); }
+        else { localStorage.setItem('animOff','1'); location.reload(); }
+      });
+    }).catch(function(){ startAnimation(); });
+    function startAnimation(){
+    const ctx = cv.getContext('2d');
+    let W, H, dpr;
+    function resize(){
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = W * dpr; cv.height = H * dpr;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      initStars();
+    }
+    const STAR_COUNT = 180;
+    let stars = [];
+    function initStars(){
+      stars = [];
+      for(let i=0;i<STAR_COUNT;i++){
+        stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.4+0.3,a:Math.random()*0.7+0.3,twinkleSpeed:Math.random()*0.02+0.005,twinklePhase:Math.random()*Math.PI*2});
+      }
+    }
+    const shoots = [];
+    function spawnShoot(){
+      shoots.push({x:Math.random()*W*0.8+W*0.1,y:Math.random()*H*0.4,vx:(Math.random()*3+2)*(Math.random()>0.5?1:-1),vy:Math.random()*2+1.5,life:1,len:Math.random()*60+40,decay:Math.random()*0.012+0.008});
+    }
+    let t = 0;
+    function draw(){
+      t++;
+      ctx.clearRect(0,0,W,H);
+      const sky = ctx.createLinearGradient(0,0,W,H);
+      sky.addColorStop(0,'#0f0620');sky.addColorStop(0.4,'#2c0038');sky.addColorStop(0.6,'#1b0033');sky.addColorStop(1,'#0f0620');
+      ctx.fillStyle = sky; ctx.fillRect(0,0,W,H);
+      for(const s of stars){
+        const flicker = Math.sin(t*s.twinkleSpeed+s.twinklePhase)*0.35+0.65;
+        ctx.globalAlpha = s.a * flicker; ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if(Math.random()<0.008) spawnShoot();
+      for(let i=shoots.length-1;i>=0;i--){
+        const sh = shoots[i]; sh.x+=sh.vx; sh.y+=sh.vy; sh.life-=sh.decay;
+        if(sh.life<=0){shoots.splice(i,1);continue;}
+        const dx=-sh.vx,dy=-sh.vy,mag=Math.sqrt(dx*dx+dy*dy),nx=dx/mag*sh.len,ny=dy/mag*sh.len;
+        const grad=ctx.createLinearGradient(sh.x,sh.y,sh.x+nx,sh.y+ny);
+        grad.addColorStop(0,'rgba(255,255,255,'+sh.life+')');grad.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.strokeStyle=grad;ctx.lineWidth=1.5;ctx.globalAlpha=sh.life;
+        ctx.beginPath();ctx.moveTo(sh.x,sh.y);ctx.lineTo(sh.x+nx,sh.y+ny);ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(draw);
+    }
+    resize(); window.addEventListener('resize', resize); draw();
+    }
+  })();
+  </script>
+</body>
+</html>
