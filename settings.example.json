@@ -19,6 +19,7 @@
     "microsoft": {
       "hosts": [
         "https://outlook.office365.com/",
+        "https://advania-my.sharepoint.com/",
         "https://login.microsoftonline.com/",
         "https://portal.office.com/"
       ],
@@ -40,7 +41,7 @@
       "timeoutMs": 5000
     },
     "uptime": {
-      "url": "https://example.com/",
+      "url": "https://vpn.lundstream.net/",
       "timeoutMs": 8000
     }
   },
@@ -50,9 +51,12 @@
     "nvdV2Url": "https://services.nvd.nist.gov/rest/json/cves/2.0"
   },
   "rssFeeds": [
+    "https://www.advania.se/nyheter/rss.xml",
+    "https://computersweden.se/feed/",
     "https://www.bleepingcomputer.com/feed/",
     "https://feeds.feedburner.com/TheHackersNews",
     "https://techcrunch.com/feed/",
+    "https://www.neowin.net/rss/index.xml",
     "https://www.securityweek.com/feed/",
     "https://www.schneier.com/blog/atom.xml",
     "https://www.reddit.com/r/netsec/.rss"
