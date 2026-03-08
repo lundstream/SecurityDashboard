@@ -3,3 +3,8 @@ cves_store.json
 cve_history.json
 uptime_history.json
 *.log
+dashboard.db
+dashboard.db-wal
+dashboard.db-shm
+settings.json
+server.old.js

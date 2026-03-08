@@ -1,13 +1,17 @@
-﻿const express = require('express');
+const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
-const fs = require('fs').promises;
-const fsSync = require('fs');
 const path = require('path');
-const zlib = require('zlib');
+const fs = require('fs');
+const db = require('./db');
+
+// --- Load settings (server-side only, never served publicly) ---
+const settings = JSON.parse(fs.readFileSync(path.join(__dirname, 'settings.json'), 'utf8'));
 
 const app = express();
 app.use(cors());
+
+// Serve public/ static files with no-cache for dev assets
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (/\.(html|js|css)$/i.test(filePath)) {
@@ -16,17 +20,110 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-const CIRCL_LAST = 'https://cve.circl.lu/api/last';
-const CIRCL_LAST_INIT = 'https://cve.circl.lu/api/last/100'; // larger initial fetch
-const CVE_STORE_FILE = path.join(__dirname, 'cves_store.json');
-const CVE_POLL_INTERVAL = 60 * 60 * 1000; // 1 hour
-const CVE_MAX_AGE_DAYS = 30;
+// Block direct access to settings.json and db files
+app.use((req, res, next) => {
+  const lower = req.path.toLowerCase();
+  if (lower.includes('settings.json') || lower.includes('dashboard.db')) {
+    return res.status(403).send('Forbidden');
+  }
+  next();
+});
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-// --- Persistent CVE store ---
-let _cveStore = []; // in-memory array of CVE items
+// --- Server-side CVSS score extraction ---
+function extractCvssScore(item) {
+  if (!item) return null;
+  if (typeof item.cvss === 'number') return item.cvss;
+  if (item.cvss && !isNaN(Number(item.cvss))) return Number(item.cvss);
+  if (item.cvss3 && item.cvss3.baseScore) return Number(item.cvss3.baseScore);
+  // NVD v2 metrics
+  try {
+    if (item.metrics) {
+      const m = item.metrics;
+      if (m.cvssMetricV31 && m.cvssMetricV31.length) return Number(m.cvssMetricV31[0].cvssData.baseScore);
+      if (m.cvssMetricV40 && m.cvssMetricV40.length) return Number(m.cvssMetricV40[0].cvssData.baseScore);
+      if (m.cvssMetricV30 && m.cvssMetricV30.length) return Number(m.cvssMetricV30[0].cvssData.baseScore);
+      if (m.cvssMetricV2 && m.cvssMetricV2.length) return Number(m.cvssMetricV2[0].cvssData.baseScore);
+    }
+  } catch (e) {}
+  // NVD containers.adp and CIRCL containers.cna
+  try {
+    const cont = item.containers;
+    if (cont) {
+      const sources = [].concat(cont.adp || [], cont.cna ? [cont.cna] : []);
+      for (const a of sources) {
+        if (a.metrics && a.metrics.length) {
+          for (const m of a.metrics) {
+            if (m.cvssV4_0 && m.cvssV4_0.baseScore) return Number(m.cvssV4_0.baseScore);
+            if (m.cvssV3_1 && m.cvssV3_1.baseScore) return Number(m.cvssV3_1.baseScore);
+            if (m.cvssV3 && m.cvssV3.baseScore) return Number(m.cvssV3.baseScore);
+            if (m.cvssV3_0 && m.cvssV3_0.baseScore) return Number(m.cvssV3_0.baseScore);
+          }
+        }
+      }
+    }
+  } catch (e) {}
+  // CSAF
+  try {
+    if (Array.isArray(item.vulnerabilities)) {
+      for (const v of item.vulnerabilities) {
+        if (v && Array.isArray(v.scores)) {
+          for (const sc of v.scores) {
+            if (sc.cvss_v3 && sc.cvss_v3.baseScore) return Number(sc.cvss_v3.baseScore);
+            if (sc.cvss_v4 && sc.cvss_v4.baseScore) return Number(sc.cvss_v4.baseScore);
+          }
+        }
+      }
+    }
+  } catch (e) {}
+  // severity text fallback
+  const sevText = (item.database_specific && item.database_specific.severity)
+    || (item.document && item.document.aggregate_severity && item.document.aggregate_severity.text)
+    || '';
+  if (sevText) {
+    const sev = String(sevText).toUpperCase();
+    if (sev === 'CRITICAL') return 9.0;
+    if (sev === 'HIGH' || sev === 'IMPORTANT') return 7.5;
+    if (sev === 'MEDIUM' || sev === 'MODERATE') return 5.0;
+    if (sev === 'LOW') return 2.0;
+  }
+  return null;
+}
 
+// Backfill CVSS scores for existing rows missing them
+function backfillCvssScores() {
+  const d = db.getDb();
+  const rows = d.prepare('SELECT id, data FROM cves WHERE cvss_score IS NULL').all();
+  if (rows.length === 0) return;
+  const update = d.prepare('UPDATE cves SET cvss_score = ? WHERE id = ?');
+  let updated = 0;
+  for (const row of rows) {
+    try {
+      const item = JSON.parse(row.data);
+      const score = extractCvssScore(item);
+      if (score != null && !isNaN(score)) { update.run(score, row.id); updated++; }
+    } catch (e) {}
+  }
+  console.log(`Backfilled CVSS scores: ${updated}/${rows.length} rows updated`);
+}
+
+// --- HTTP probe helper ---
+async function probeUrl(url, timeout = 5000) {
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    const r = await fetch(url, { signal: controller.signal });
+    clearTimeout(id);
+    return { ok: !!r.ok, status: r.status };
+  } catch (e) {
+    return { ok: false, status: 0, error: e && e.message };
+  }
+}
+
+// =========================================================================
+//  CVE POLLING (every 10 minutes, stored in SQLite, keep 60 days)
+// =========================================================================
 function extractItemDate(it) {
   const raw = it.Published || it.published
     || (it.cveMetadata && (it.cveMetadata.datePublished || it.cveMetadata.dateUpdated))
@@ -60,166 +157,443 @@ function extractItemId(it) {
   return it.id || '';
 }
 
-async function loadCveStore() {
-  try {
-    const raw = await fs.readFile(CVE_STORE_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) { _cveStore = parsed; return; }
-  } catch (_) {}
-  _cveStore = [];
-}
+// Backfill CVEs from NVD for the last 30 days if any days are missing data.
+// NVD public rate limit: ~5 requests per 30 seconds without an API key.
+// We wait 6 seconds between each request to stay well under the limit.
+async function backfillCvesFromNvd() {
+  // Clean non-CVE entries (MAL-*, GHSA-*, etc.)
+  const cleaned = db.getDb().prepare("DELETE FROM cves WHERE id NOT LIKE 'CVE-%'").run();
+  if (cleaned.changes > 0) console.log(`Cleaned ${cleaned.changes} non-CVE entries from DB`);
 
-async function saveCveStore() {
-  try {
-    await fs.writeFile(CVE_STORE_FILE, JSON.stringify(_cveStore), 'utf8');
-  } catch (e) { console.error('saveCveStore error:', e && e.message); }
-}
-
-function purgeCveStore() {
-  const cutoff = Date.now() - CVE_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
-  const before = _cveStore.length;
-  _cveStore = _cveStore.filter(it => {
-    const d = extractItemDate(it);
-    return d && d.getTime() >= cutoff;
-  });
-  if (_cveStore.length < before) {
-    console.log(`Purged ${before - _cveStore.length} CVEs older than ${CVE_MAX_AGE_DAYS} days (${_cveStore.length} remaining)`);
+  // Check which days in the last 30 days have zero CVEs
+  const d = db.getDb();
+  const now = new Date();
+  const missingDays = [];
+  for (let i = 29; i >= 1; i--) {
+    const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const row = d.prepare('SELECT COUNT(*) as cnt FROM cves WHERE published LIKE ?').get(day + '%');
+    if (!row || row.cnt < 10) missingDays.push(day);
   }
+  if (missingDays.length === 0) {
+    console.log('CVE backfill: all 30 days covered, skipping.');
+    return;
+  }
+  console.log(`CVE backfill: ${missingDays.length} days missing data, fetching from NVD...`);
+
+  // Group consecutive missing days into date ranges to minimize API calls
+  const ranges = [];
+  let rangeStart = missingDays[0];
+  let rangeEnd = missingDays[0];
+  for (let i = 1; i < missingDays.length; i++) {
+    const prev = new Date(rangeEnd + 'T00:00:00Z');
+    const curr = new Date(missingDays[i] + 'T00:00:00Z');
+    if (curr.getTime() - prev.getTime() <= 24 * 60 * 60 * 1000) {
+      rangeEnd = missingDays[i];
+    } else {
+      ranges.push({ start: rangeStart, end: rangeEnd });
+      rangeStart = missingDays[i];
+      rangeEnd = missingDays[i];
+    }
+  }
+  ranges.push({ start: rangeStart, end: rangeEnd });
+
+  const resultsPerPage = 100;
+  for (const range of ranges) {
+    const pubStartDate = range.start + 'T00:00:00.000';
+    const pubEndDate = range.end + 'T23:59:59.999';
+    let totalResults = Infinity;
+    let fetched = 0;
+    let pageIndex = 0;
+    console.log(`  Backfilling ${range.start} to ${range.end}...`);
+    while (fetched < totalResults) {
+      try {
+        const url = `${settings.cve.nvdV2Url}?pubStartDate=${encodeURIComponent(pubStartDate)}&pubEndDate=${encodeURIComponent(pubEndDate)}&resultsPerPage=${resultsPerPage}&startIndex=${pageIndex * resultsPerPage}`;
+        const r = await fetch(url);
+        if (r.status === 429) {
+          console.log('    Rate limited (429), waiting 30 seconds...');
+          await sleep(30000);
+          continue; // retry same page
+        }
+        if (!r.ok) {
+          console.error(`  NVD returned status ${r.status}, skipping range.`);
+          break;
+        }
+        const json = await r.json();
+        totalResults = json.totalResults || 0;
+        const vulns = json.vulnerabilities || [];
+        for (const v of vulns) {
+          const cve = v.cve || v;
+          const id = cve.id || '';
+          if (!id) continue;
+          const pubRaw = cve.published || cve.datePublished || null;
+          const pub = pubRaw ? new Date(pubRaw) : null;
+          db.upsertCve(id, cve, pub && !isNaN(pub.getTime()) ? pub.toISOString() : null, extractCvssScore(cve));
+        }
+        fetched += vulns.length;
+        console.log(`    Page ${pageIndex + 1}: ${vulns.length} CVEs (${fetched}/${totalResults})`);
+        pageIndex++;
+        if (vulns.length === 0) break;
+        if (fetched < totalResults) await sleep(6000);
+      } catch (e) {
+        console.error('  NVD backfill error:', e && e.message);
+        break;
+      }
+    }
+  }
+  console.log(`CVE backfill complete: DB now has ${db.getCveCount()} CVEs`);
 }
 
 async function pollCves() {
   try {
-    // Use larger fetch when store is empty (initial populate)
-    const url = _cveStore.length === 0 ? CIRCL_LAST_INIT : CIRCL_LAST;
+    const currentCount = db.getCveCount();
+    const url = currentCount === 0
+      ? `${settings.cve.circlLastUrl}/${settings.polling.cveInitialFetchCount}`
+      : settings.cve.circlLastUrl;
     const r = await fetch(url);
     let data = await r.json();
     if (!Array.isArray(data)) {
       if (data && Array.isArray(data.value)) data = data.value;
       else { console.error('pollCves: unexpected response'); return; }
     }
-    // find the newest date already in the store
-    let newestDate = null;
-    for (const it of _cveStore) {
-      const d = extractItemDate(it);
-      if (d && (!newestDate || d > newestDate)) newestDate = d;
-    }
-    // build set of existing IDs for fast dedup
-    const existing = new Set(_cveStore.map(it => extractItemId(it)).filter(Boolean));
     let added = 0;
     for (const it of data) {
       const id = extractItemId(it);
-      if (id && existing.has(id)) continue;
-      // skip items older than or equal to newest stored date
-      if (newestDate) {
-        const d = extractItemDate(it);
-        if (d && d <= newestDate) continue;
-      }
-      _cveStore.push(it);
-      if (id) existing.add(id);
+      if (!id) continue;
+      const d = extractItemDate(it);
+      const published = d ? d.toISOString() : null;
+      // upsert — SQLite handles dedup by primary key
+      db.upsertCve(id, it, published, extractCvssScore(it));
       added++;
     }
-    // purge old entries
-    purgeCveStore();
-    // sort newest first
-    _cveStore.sort((a, b) => {
-      const da = extractItemDate(a) || new Date(0);
-      const db = extractItemDate(b) || new Date(0);
-      return db - da;
-    });
-    await saveCveStore();
-    console.log(`pollCves: fetched ${data.length}, added ${added} new (newer than ${newestDate ? newestDate.toISOString() : 'none'}), store has ${_cveStore.length} CVEs`);
+    const purged = db.purgeCves(settings.polling.cveMaxAgeDays);
+    const total = db.getCveCount();
+    console.log(`pollCves: fetched ${data.length}, upserted ${added}, purged ${purged}, total ${total}`);
   } catch (e) {
     console.error('pollCves error:', e && e.message);
   }
 }
 
-// Start CVE store: load from disk, poll immediately, then every 10 min
-(async () => {
-  await loadCveStore();
-  console.log(`CVE store loaded: ${_cveStore.length} items from disk`);
-  await pollCves();
-  setInterval(pollCves, CVE_POLL_INTERVAL);
-})();
+// =========================================================================
+//  NEWS POLLING (every 5 minutes, stored in SQLite, keep 60 days)
+// =========================================================================
+async function fetchAllFeeds() {
+  const feeds = settings.rssFeeds;
+  const results = await Promise.allSettled(feeds.map(u => fetch(u).then(r => r.text())));
+  const items = [];
+  for (let i = 0; i < results.length; i++) {
+    const source = feeds[i];
+    if (results[i].status !== 'fulfilled') continue;
+    const text = results[i].value;
+    const itemRe = /<item[\s\S]*?<\/item>/gi;
+    const entryRe = /<entry[\s\S]*?<\/entry>/gi;
+    const matchItems = text.match(itemRe) || [];
+    const matchEntries = text.match(entryRe) || [];
+    const extract = (blk) => {
+      const t = (blk.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+      let l = (blk.match(/<link[^>]*href=["']([^"']+)["']/i) || [])[1];
+      if (!l) l = (blk.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1] || '';
+      const pd = (blk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) || [])[1]
+              || (blk.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i) || [])[1]
+              || (blk.match(/<dc:date[^>]*>([\s\S]*?)<\/dc:date>/i) || [])[1]
+              || '';
+      return { t: t.trim(), l: l.trim(), pd };
+    };
+    const push = (t, l, pd) => {
+      if (!t || !l) return;
+      const d = pd ? new Date(pd) : new Date();
+      items.push({ title: t, link: l, pubDate: isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString(), source });
+    };
+    matchItems.forEach(b => { const { t, l, pd } = extract(b); push(t, l, pd); });
+    matchEntries.forEach(b => { const { t, l, pd } = extract(b); push(t, l, pd); });
+  }
+  return items;
+}
 
-if (!global._uptimeHistory) global._uptimeHistory = [];
-
-// Helper: simple HTTP probe with timeout
-async function probeUrl(url, timeout = 5000) {
+async function pollNews() {
   try {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    const r = await fetch(url, { signal: controller.signal });
-    clearTimeout(id);
-    return { ok: !!r.ok, status: r.status };
+    const items = await fetchAllFeeds();
+    let added = 0;
+    for (const it of items) {
+      db.upsertNews(it);
+      added++;
+    }
+    const purged = db.purgeNews(settings.polling.newsMaxAgeDays);
+    const total = db.getNewsCount();
+    console.log(`pollNews: fetched ${items.length}, upserted ${added}, purged ${purged}, total ${total}`);
   } catch (e) {
-    return { ok: false, status: 0, error: e && e.message };
+    console.error('pollNews error:', e && e.message);
   }
 }
 
-const UPTIME_FILE = path.join(__dirname, 'uptime_history.json');
+// =========================================================================
+//  UPTIME / SERVICE CHECKS (hourly, stored in SQLite, keep 30 days)
+// =========================================================================
+// In-memory cache of latest service status for fast UI refreshes
+global._serviceSummary = {};
 
-async function saveUptimeHistoryFile(arr) {
-  try {
-    await fs.writeFile(UPTIME_FILE, JSON.stringify(arr, null, 2), 'utf8');
-  } catch (e) { console.error('saveUptimeHistoryFile', e && e.message); }
-}
-
-async function loadUptimeHistoryFile() {
-  try {
-    const raw = await fs.readFile(UPTIME_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-  } catch (e) {
-    // ignore
-  }
-  return null;
-}
-
-// Prefill uptime history (hourly entries) with all-ok entries for past `hours` hours
-async function prefillUptimeHistory(hours = 168) {
+async function checkServices() {
   const now = Date.now();
-  const arr = [];
-  for (let i = hours - 1; i >= 0; i--) {
-    const ts = now - i * 60 * 60 * 1000;
-    arr.push({ ts, ok: true, details: [{ name: 'prefill', ok: true, note: 'prefilled' }] });
+  const details = [];
+
+  // CIRCL
+  const circl = await probeUrl(settings.cve.circlLastUrl, 6000);
+  details.push({ name: 'circl_last', ok: circl.ok, status: circl.status });
+
+  // NVD
+  const nvd = await probeUrl(settings.cve.nvdV2Url + '?resultsPerPage=1', 6000);
+  details.push({ name: 'nvd_v2', ok: nvd.ok, status: nvd.status });
+
+  // Uptime (custom service)
+  try {
+    const uptimeProbe = await probeUrl(settings.services.uptime.url, settings.services.uptime.timeoutMs);
+    details.push({ name: 'uptime_lundstream', ok: uptimeProbe.ok, status: uptimeProbe.status });
+  } catch (e) { details.push({ name: 'uptime_lundstream', ok: false, status: 0 }); }
+
+  // Microsoft
+  const msResults = [];
+  for (const h of settings.services.microsoft.hosts) {
+    const r = await probeUrl(h, settings.services.microsoft.timeoutMs);
+    const reachable = (r && typeof r.status === 'number') ? (r.status < 500) : !!r.ok;
+    msResults.push({ host: h.replace(/^https?:\/\//, '').replace(/\/+$/, ''), ok: reachable, status: r.status });
   }
-  await saveUptimeHistoryFile(arr);
-  global._uptimeHistory = arr.slice();
-  return arr;
+  const msDown = msResults.filter(x => !x.ok).length;
+  let msColor = 'green';
+  if (msDown === 1) msColor = 'yellow';
+  if (msDown >= 2) msColor = 'red';
+  details.push({ name: 'microsoft', ok: msDown === 0, color: msColor, hosts: msResults });
+  global._serviceSummary.microsoft = { ts: now, color: msColor, hosts: msResults };
+
+  // Cloudflare
+  const cfResults = [];
+  for (const h of settings.services.cloudflare.hosts) {
+    const r = await probeUrl(h, settings.services.cloudflare.timeoutMs);
+    cfResults.push({ host: h.replace(/^https?:\/\//, '').replace(/\/+$/, ''), ok: r.ok, status: r.status });
+  }
+  const cfDown = cfResults.filter(x => !x.ok).length;
+  let cfColor = 'green';
+  if (cfDown === 1) cfColor = 'yellow';
+  if (cfDown >= 2) cfColor = 'red';
+  details.push({ name: 'cloudflare', ok: cfDown === 0, color: cfColor, hosts: cfResults });
+  global._serviceSummary.cloudflare = { ts: now, color: cfColor, hosts: cfResults };
+
+  // AWS
+  let awsOk = false; let awsStatus = 0;
+  try {
+    const r = await probeUrl(settings.services.aws.url, settings.services.aws.timeoutMs);
+    awsOk = !!r.ok; awsStatus = r.status;
+  } catch (e) {}
+  const awsColor = awsOk ? 'green' : 'red';
+  details.push({ name: 'aws', ok: awsOk, color: awsColor, status: awsStatus });
+  global._serviceSummary.aws = { ts: now, color: awsColor, ok: awsOk };
+
+  const overall = circl.ok && nvd.ok;
+
+  // Store this hourly check in the database
+  db.insertUptime(now, overall, details);
+  db.purgeUptime(settings.polling.uptimeMaxAgeDays);
+
+  return { ok: overall, services: details };
 }
 
+// Prefill uptime DB with OK entries for the last N days if empty
+function prefillUptime() {
+  const count = db.getUptimeCount();
+  if (count > 0) return; // already has data
+  const now = Date.now();
+  const hours = settings.polling.uptimePrefillDays * 24;
+  for (let i = hours - 1; i >= 1; i--) { // leave last slot for live ping
+    const ts = now - i * 60 * 60 * 1000;
+    db.insertUptime(ts, true, [{ name: 'prefill', ok: true, note: 'prefilled' }]);
+  }
+  console.log(`Prefilled ${hours - 1} uptime entries for last ${settings.polling.uptimePrefillDays} days`);
+}
+
+// Fast Microsoft polls (every 10s for UI responsiveness)
+async function pollMicrosoftFast() {
+  try {
+    const msResults = [];
+    for (const h of settings.services.microsoft.hosts) {
+      const r = await probeUrl(h, settings.services.microsoft.timeoutMs);
+      const reachable = (r && typeof r.status === 'number') ? (r.status < 500) : !!r.ok;
+      msResults.push({ host: h.replace(/^https?:\/\//, '').replace(/\/+$/, ''), ok: reachable, status: r.status });
+    }
+    const msDown = msResults.filter(x => !x.ok).length;
+    let msColor = 'green';
+    if (msDown === 1) msColor = 'yellow';
+    if (msDown >= 2) msColor = 'red';
+    global._serviceSummary.microsoft = { ts: Date.now(), color: msColor, hosts: msResults };
+  } catch (e) {}
+}
+
+// Fast Cloudflare/AWS polls (every minute for UI)
+async function pollCloudflareAws() {
+  try {
+    const cf1 = await probeUrl(settings.services.cloudflare.hosts[0], settings.services.cloudflare.timeoutMs);
+    const cf0 = await probeUrl(settings.services.cloudflare.hosts[1], settings.services.cloudflare.timeoutMs);
+    const cfDown = [cf1, cf0].filter(x => !x.ok).length;
+    let cfColor = 'green'; if (cfDown === 1) cfColor = 'yellow'; if (cfDown >= 2) cfColor = 'red';
+    global._serviceSummary.cloudflare = { ts: Date.now(), color: cfColor, hosts: [{ host: '1.1.1.1', ok: cf1.ok }, { host: '1.0.0.1', ok: cf0.ok }] };
+
+    const awsProbe = await probeUrl(settings.services.aws.url, settings.services.aws.timeoutMs);
+    global._serviceSummary.aws = { ts: Date.now(), color: awsProbe.ok ? 'green' : 'red', ok: awsProbe.ok };
+  } catch (e) {}
+}
+
+// =========================================================================
+//  GEO-IP CACHE (in-memory, avoid hammering free API)
+// =========================================================================
+const _geoIpCache = new Map();
+const GEO_IP_TTL = 60 * 60 * 1000; // 1 hour
+
+async function lookupGeoIp(ip) {
+  const cached = _geoIpCache.get(ip);
+  if (cached && Date.now() - cached.ts < GEO_IP_TTL) return cached.data;
+  try {
+    const url = settings.geoip.apiUrl.replace('{ip}', encodeURIComponent(ip));
+    const r = await fetch(url);
+    const data = await r.json();
+    if (data && data.status === 'success') {
+      const result = { countryCode: data.countryCode };
+      _geoIpCache.set(ip, { ts: Date.now(), data: result });
+      return result;
+    }
+  } catch (e) {}
+  return { countryCode: '' };
+}
+
+// =========================================================================
+//  API ROUTES
+// =========================================================================
+
+// Visitor IP + country — use external service so we always get the public IP
+app.get('/api/myip', async (req, res) => {
+  try {
+    // Try to get external/public IP from ip-api (returns requester's public IP when called with no argument)
+    const r = await fetch('http://ip-api.com/json/?fields=status,query,countryCode');
+    const data = await r.json();
+    if (data && data.status === 'success') {
+      return res.json({ ip: data.query || '', countryCode: data.countryCode || '' });
+    }
+  } catch (e) { /* fall through */ }
+  // Fallback: use request header
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '';
+  const cleanIp = ip.replace(/^::ffff:/, '');
+  const geo = await lookupGeoIp(cleanIp);
+  res.json({ ip: cleanIp, countryCode: geo.countryCode || '' });
+});
+
+// CVEs from database (supports server-side CVSS filtering)
+app.get('/api/cves', (req, res) => {
+  const count = Math.min(parseInt(req.query.count || '50', 10), 200);
+  const offset = parseInt(req.query.offset || '0', 10);
+  const cvssMin = req.query.cvssMin ? parseFloat(req.query.cvssMin) : null;
+  const cves = db.getCvesFiltered(count, offset, cvssMin);
+  res.json(cves);
+});
+
+// Load more CVEs — if DB has no more, fetch fresh from source
+app.get('/api/cves/more', async (req, res) => {
+  const count = Math.min(parseInt(req.query.count || '50', 10), 200);
+  const offset = parseInt(req.query.offset || '0', 10);
+  let cves = db.getCves(count, offset);
+  if (cves.length === 0) {
+    // Try a fresh fetch from CIRCL
+    try {
+      const r = await fetch(`${settings.cve.circlLastUrl}/${count}`);
+      let data = await r.json();
+      if (!Array.isArray(data)) {
+        if (data && Array.isArray(data.value)) data = data.value;
+        else data = [];
+      }
+      for (const it of data) {
+        const id = extractItemId(it);
+        if (!id) continue;
+        const d = extractItemDate(it);
+        db.upsertCve(id, it, d ? d.toISOString() : null, extractCvssScore(it));
+      }
+      cves = db.getCves(count, offset);
+    } catch (e) {
+      console.error('cves/more fallback error:', e && e.message);
+    }
+  }
+  res.json(cves);
+});
+
+// News from database
+app.get('/api/rss', (req, res) => {
+  const count = Math.min(parseInt(req.query.count || '50', 10), 200);
+  const offset = parseInt(req.query.offset || '0', 10);
+  const news = db.getNews(count, offset);
+  res.json(news);
+});
+
+// Load more news — if DB has no more, fetch fresh from source
+app.get('/api/rss/more', async (req, res) => {
+  const count = Math.min(parseInt(req.query.count || '50', 10), 200);
+  const offset = parseInt(req.query.offset || '0', 10);
+  let news = db.getNews(count, offset);
+  if (news.length === 0) {
+    try {
+      const items = await fetchAllFeeds();
+      for (const it of items) db.upsertNews(it);
+      news = db.getNews(count, offset);
+    } catch (e) {
+      console.error('rss/more fallback error:', e && e.message);
+    }
+  }
+  res.json(news);
+});
+
+// Service status
+app.get('/api/status', async (req, res) => {
+  try {
+    // Return cached fast-poll data when available
+    const details = [];
+    const ms = global._serviceSummary.microsoft;
+    if (ms) details.push({ name: 'microsoft', ok: ms.color === 'green', color: ms.color, hosts: ms.hosts });
+    const cf = global._serviceSummary.cloudflare;
+    if (cf) details.push({ name: 'cloudflare', ok: cf.color === 'green', color: cf.color, hosts: cf.hosts });
+    const aws = global._serviceSummary.aws;
+    if (aws) details.push({ name: 'aws', ok: !!aws.ok, color: aws.color || (aws.ok ? 'green' : 'red') });
+    res.json({ ok: details.every(d => d.ok), services: details });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Uptime history (returns last 24h from DB)
+app.get('/api/uptime', (req, res) => {
+  try {
+    const data = db.getUptime(settings.polling.uptimeDisplayHours);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Uptime stats — 30-day percentage
+app.get('/api/uptime-stats', (req, res) => {
+  try {
+    const data = db.getUptime(settings.polling.uptimeMaxAgeDays * 24);
+    const total = data.length;
+    const okCount = data.filter(d => d.ok).length;
+    const pct = total > 0 ? (okCount / total) * 100 : 100;
+    res.json({ total, ok: okCount, percentage: pct });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Zero-days (live CIRCL scan)
 app.get('/api/zero-days', async (req, res) => {
   const count = parseInt(req.query.count || '200', 10);
   try {
-    const r = await fetch(CIRCL_LAST);
+    const r = await fetch(settings.cve.circlLastUrl);
     let data = await r.json();
-    // CIRCL /api/last sometimes returns an object with `value` array (CSAF) or a plain array
     if (!Array.isArray(data)) {
       if (data && Array.isArray(data.value)) data = data.value;
       else return res.status(502).json({ error: 'unexpected response' });
     }
-
-    function extractSummary(item) {
-      if (!item) return '';
-      if (item.summary) return item.summary;
-      if (item.description) return item.description;
-      if (item.cveMetadata && (item.cveMetadata.description || item.cveMetadata.summary)) return item.cveMetadata.description || item.cveMetadata.summary || '';
-      if (item.containers && item.containers.cna) {
-        const cna = item.containers.cna;
-        if (cna.descriptions && cna.descriptions.length) {
-          const d = cna.descriptions[0];
-          return d.value || d.description || d.text || '';
-        }
-        if (cna.descriptions && typeof cna.descriptions === 'string') return cna.descriptions;
-        if (cna.title) return cna.title;
-      }
-      if (item.document && item.document.notes && item.document.notes.length) {
-        const note = item.document.notes.find(n => n.category === 'summary') || item.document.notes[0];
-        return (note && (note.text || note.title || note.summary)) || '';
-      }
-      return '';
-    }
-
     const zeroDayRegex = /\bzero[- ]?day\b|\b0[- ]?day\b|zero\sday/i;
     const filtered = data.slice(0, count).filter(item => {
       const s = extractSummary(item) || '';
@@ -231,175 +605,35 @@ app.get('/api/zero-days', async (req, res) => {
   }
 });
 
-// Latest CVE items — served from persistent local store
-app.get('/api/cves', (req, res) => {
-  const count = parseInt(req.query.count || '50', 10);
-  const offset = parseInt(req.query.offset || '0', 10);
-  // _cveStore is already sorted newest-first by pollCves()
-  res.json(_cveStore.slice(offset, offset + count));
-});
-
-app.get('/api/status', async (req, res) => {
-  try {
-    const st = await checkServices();
-    res.json(st);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+function extractSummary(item) {
+  if (!item) return '';
+  if (item.summary) return item.summary;
+  if (item.description) return item.description;
+  // NVD v2 format
+  if (Array.isArray(item.descriptions) && item.descriptions.length) {
+    const d = item.descriptions.find(d => d.lang === 'en') || item.descriptions[0];
+    if (d && d.value) return d.value;
   }
-});
-
-// Basic service checks and uptime history
-async function checkServices() {
-  const now = Date.now();
-  const details = [];
-
-  // CIRCL and NVD probes (keep original checks)
-  const circl = await probeUrl(CIRCL_LAST, 6000);
-  details.push({ name: 'circl_last', ok: circl.ok, status: circl.status });
-  const nvd = await probeUrl('https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1', 6000);
-  details.push({ name: 'nvd_v2', ok: nvd.ok, status: nvd.status });
-
-  // VPN check (include in the main hourly check so we only append once per hour)
-  try {
-    const vpn = await probeUrl('https://vpn.lundstream.net/', 8000);
-    details.push({ name: 'vpn_lundstream', ok: vpn.ok, status: vpn.status });
-  } catch (e) { details.push({ name: 'vpn_lundstream', ok: false, status: 0, error: e && e.message }); }
-
-  // (VPN checked hourly by separate scheduler)
-
-  // Microsoft hosts: ping (HTTP) each host
-  const msHosts = ['https://outlook.office365.com/', 'https://advania-my.sharepoint.com/', 'https://login.microsoftonline.com/', 'https://portal.office.com/'];
-  const msResults = [];
-  for (const h of msHosts) {
-    const r = await probeUrl(h, 4000);
-    // treat client errors (4xx) as reachable — many Microsoft endpoints return 403/401 for anonymous requests
-    const reachable = (r && typeof r.status === 'number') ? (r.status < 500) : !!r.ok;
-    msResults.push({ host: h.replace(/^https?:\/\//, ''), ok: reachable, status: r.status });
+  if (item.containers && item.containers.cna) {
+    const cna = item.containers.cna;
+    if (cna.descriptions && cna.descriptions.length) {
+      const d = cna.descriptions[0];
+      return d.value || d.description || d.text || '';
+    }
   }
-  const msDown = msResults.filter(x => !x.ok).length;
-  let msColor = 'green';
-  if (msDown === 1) msColor = 'yellow';
-  if (msDown >= 2) msColor = 'red';
-  details.push({ name: 'microsoft', ok: msDown === 0, color: msColor, hosts: msResults });
-
-  // Cloudflare: ping 1.1.1.1 and 1.0.0.1 via HTTPS trace endpoint
-  const cfHosts = ['https://1.1.1.1/cdn-cgi/trace', 'https://1.0.0.1/cdn-cgi/trace'];
-  const cfResults = [];
-  for (const h of cfHosts) {
-    const r = await probeUrl(h, 3000);
-    cfResults.push({ host: h.replace(/^https?:\/\//, ''), ok: r.ok, status: r.status });
+  if (item.document && item.document.notes && item.document.notes.length) {
+    const note = item.document.notes.find(n => n.category === 'summary') || item.document.notes[0];
+    return (note && (note.text || note.title)) || '';
   }
-  const cfDown = cfResults.filter(x => !x.ok).length;
-  let cfColor = 'green';
-  if (cfDown === 1) cfColor = 'yellow';
-  if (cfDown >= 2) cfColor = 'red';
-  details.push({ name: 'cloudflare', ok: cfDown === 0, color: cfColor, hosts: cfResults });
-
-  // AWS: best-effort check by fetching health page
-  let awsOk = false; let awsStatus = 0; let awsText = '';
-  try {
-    const r = await probeUrl('https://status.aws.amazon.com/', 5000);
-    awsOk = !!r.ok;
-    awsStatus = r.status;
-    try {
-      const txt = await fetch('https://status.aws.amazon.com/').then(t => t.text()).catch(()=>'');
-      awsText = txt || '';
-    } catch (e) { awsText = ''; }
-  } catch (e) {}
-  let awsColor = awsOk ? 'green' : 'red';
-  if (awsOk && /operating normally|All Systems Operational/i.test(awsText)) awsColor = 'green';
-  details.push({ name: 'aws', ok: awsOk, color: awsColor, status: awsStatus });
-
-  // overall ok only if core services ok
-  const overall = circl.ok && nvd.ok;
-
-  // store entry (keep only last 24 hourly entries for the UI/history)
-  global._uptimeHistory = global._uptimeHistory || [];
-  const entry = { ts: now, ok: overall, details };
-  global._uptimeHistory.push(entry);
-  // trim to last 24
-  global._uptimeHistory = global._uptimeHistory.slice(-24);
-  // persist to disk (replace with last 24)
-  try {
-    let out = global._uptimeHistory.slice();
-    await saveUptimeHistoryFile(out);
-  } catch (e) { /* ignore */ }
-
-  return { ok: overall, services: details, historyLength: global._uptimeHistory.length };
+  return '';
 }
 
-// Poll services every hour to populate uptime history
-setInterval(() => { checkServices().catch(() => {}); }, 60 * 60 * 1000);
-// do not seed immediately here — uptime history will be prefilled and trimmed on startup
-
-// Ensure uptime file exists; prefill with OK entries if missing
-(async () => {
-  try {
-    // Reset/prefill uptime history to last 24 hours (hourly entries)
-    // This ensures the persisted JSON reflects hourly sampling for the last day.
-    await prefillUptimeHistory(24);
-    // Trim any extra entries that may have been appended during startup to exactly 24
-    global._uptimeHistory = (global._uptimeHistory || []).slice(-24);
-    await saveUptimeHistoryFile(global._uptimeHistory);
-  } catch (e) { console.error('uptime prefill error', e && e.message); }
-
-  // Microsoft hosts check every 10 seconds (fast polling for status color)
-  const checkMicrosoftOnce = async () => {
-    const msHosts = ['https://outlook.office365.com/', 'https://advania-my.sharepoint.com/', 'https://login.microsoftonline.com/', 'https://portal.office.com/'];
-    const msResults = [];
-    for (const h of msHosts) {
-      const r = await probeUrl(h, 3000);
-      const reachable = (r && typeof r.status === 'number') ? (r.status < 500) : !!r.ok;
-      msResults.push({ host: h.replace(/^https?:\/\//, ''), ok: reachable, status: r.status });
-    }
-    const msDown = msResults.filter(x => !x.ok).length;
-    let msColor = 'green'; if (msDown === 1) msColor = 'yellow'; if (msDown >= 2) msColor = 'red';
-    global._serviceSummary = global._serviceSummary || {};
-    global._serviceSummary.microsoft = { ts: Date.now(), color: msColor, hosts: msResults };
-  };
-  checkMicrosoftOnce().catch(() => {});
-  setInterval(() => checkMicrosoftOnce().catch(() => {}), 10 * 1000);
-
-  // VPN is handled inside checkServices() now (no separate hourly appends)
-
-  // Cloudflare & AWS periodic checks every minute
-  const checkCloudflareAws = async () => {
-    try {
-      // cloudflare
-      const cf1 = await probeUrl('https://1.1.1.1/cdn-cgi/trace', 3000);
-      const cf0 = await probeUrl('https://1.0.0.1/cdn-cgi/trace', 3000);
-      global._serviceSummary = global._serviceSummary || {};
-      const cfDown = [cf1, cf0].filter(x => !x.ok).length;
-      let cfColor = 'green'; if (cfDown === 1) cfColor = 'yellow'; if (cfDown >= 2) cfColor = 'red';
-      global._serviceSummary.cloudflare = { ts: Date.now(), color: cfColor, hosts: [ { host: '1.1.1.1', ok: cf1.ok }, { host: '1.0.0.1', ok: cf0.ok } ] };
-
-      // aws
-      const awsProbe = await probeUrl('https://status.aws.amazon.com/', 5000);
-      let awsColor = awsProbe.ok ? 'green' : 'red';
-      global._serviceSummary.aws = { ts: Date.now(), color: awsColor, ok: awsProbe.ok };
-    } catch (e) { /* ignore */ }
-  };
-  checkCloudflareAws().catch(() => {});
-  setInterval(() => checkCloudflareAws().catch(() => {}), 60 * 1000);
-
-})();
-
-app.get('/api/uptime', async (req, res) => {
-  // return uptime history (timestamp + ok) limited to most recent N
-  try {
-    // only return last 24 hourly entries
-    res.json(global._uptimeHistory.slice(-24));
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// fetch single CVE details from CIRCL by ID
+// Single CVE lookup
 app.get('/api/cve/:id', async (req, res) => {
   const id = req.params.id;
   if (!id) return res.status(400).json({ error: 'missing id' });
   try {
-    const r = await fetch(`https://cve.circl.lu/api/cve/${encodeURIComponent(id)}`);
+    const r = await fetch(`${settings.cve.circlCveUrl}/${encodeURIComponent(id)}`);
     if (!r.ok) return res.status(r.status).json({ error: 'fetch failed' });
     const data = await r.json();
     res.json(data);
@@ -408,468 +642,89 @@ app.get('/api/cve/:id', async (req, res) => {
   }
 });
 
-app.get('/api/cve-stats', async (req, res) => {
-  // Serve persisted 30-day CVE counts if available, otherwise compute on demand.
+// CVE daily stats
+app.get('/api/cve-stats', (req, res) => {
   try {
-    const HIST = path.join(__dirname, 'cve_history.json');
-    try {
-      const raw = await fs.readFile(HIST, 'utf8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length >= 1) return res.json(parsed.slice(-30));
-    } catch (e) {
-      // file missing or invalid, fall through to compute
-    }
-    // compute live as fallback
-    const compute = await computeCveCountsFromSource();
-    res.json(compute);
+    const rows = db.getCveDailyCounts(30);
+    if (rows.length > 0) return res.json(rows);
+    // fallback: compute from stored CVEs
+    const counts = computeCveCountsFromDb();
+    res.json(counts);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// helper: compute 30-day counts from configured source (CIRCL)
-async function computeCveCountsFromSource() {
-  const r = await fetch(CIRCL_LAST);
-  let data = await r.json();
-  if (!Array.isArray(data)) {
-    if (data && Array.isArray(data.value)) data = data.value;
-    else data = [];
-  }
-  const counts = {};
+function computeCveCountsFromDb() {
+  const d = db.getDb();
   const now = new Date();
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const key = d.toISOString().slice(0, 10);
-    counts[key] = 0;
+  const result = [];
+  for (let i = 29; i >= 0; i--) {
+    const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const row = d.prepare(`SELECT COUNT(*) as cnt FROM cves WHERE published LIKE ?`).get(day + '%');
+    result.push({ date: day, count: row ? row.cnt : 0 });
   }
-  function parseDateString(pd) {
-    if (!pd) return null;
-    const dt = new Date(pd);
-    if (!isNaN(dt.getTime())) return dt.toISOString().slice(0, 10);
-    const m = pd && pd.match && pd.match(/(\d{4}-\d{2}-\d{2})/);
-    if (m) return m[1];
-    const tryParse = Date.parse(pd);
-    if (!isNaN(tryParse)) return (new Date(tryParse)).toISOString().slice(0, 10);
-    return null;
+  return result;
+}
+
+// Update daily CVE counts from DB data
+function updateCveDailyCounts() {
+  const counts = computeCveCountsFromDb();
+  for (const c of counts) {
+    db.upsertCveDailyCount(c.date, c.count);
   }
-  data.forEach(it => {
-    const candidates = [];
-    if (it.Published) candidates.push(it.Published);
-    if (it.published) candidates.push(it.published);
-    if (it.cveMetadata && it.cveMetadata.datePublished) candidates.push(it.cveMetadata.datePublished);
-    if (it.cveMetadata && it.cveMetadata.dateUpdated) candidates.push(it.cveMetadata.dateUpdated);
-    if (it.document && it.document.tracking) {
-      const tr = it.document.tracking;
-      if (tr.current_release_date) candidates.push(tr.current_release_date);
-      if (tr.initial_release_date) candidates.push(tr.initial_release_date);
-      if (tr.generator && tr.generator.date) candidates.push(tr.generator.date);
-    }
-    if (it.document && it.document.notes && it.document.notes.length) {
-      it.document.notes.forEach(n => { if (n.title) candidates.push(n.title); if (n.text) candidates.push(n.text); });
-    }
-    let day = null;
-    for (const pd of candidates) {
-      day = parseDateString(pd);
-      if (day) break;
-    }
-    if (!day) return;
-    if (counts.hasOwnProperty(day)) counts[day]++;
+  console.log(`Updated CVE daily counts: ${counts.length} days`);
+}
+
+// =========================================================================
+//  PUBLIC SETTINGS (safe subset for frontend)
+// =========================================================================
+app.get('/api/settings/public', (req, res) => {
+  res.json({
+    siteName: settings.siteName || 'Security dashboard',
+    logo: settings.logo || ''
   });
-  // fallback: if almost empty, spread items evenly across days
-  const total = Object.values(counts).reduce((s, v) => s + v, 0);
-  if (total < 2 && data.length > 0) {
-    const days = Object.keys(counts).sort();
-    for (let i = 0; i < data.length; i++) {
-      const idx = i % days.length;
-      counts[days[idx]] = (counts[days[idx]] || 0) + 1;
-    }
-  }
-  const out = Object.keys(counts).sort().map(d => ({ date: d, count: counts[d] }));
-  return out;
-}
-
-// persist CVE history to disk
-async function saveCveHistory(arr) {
-  const HIST = path.join(__dirname, 'cve_history.json');
-  try { await fs.writeFile(HIST, JSON.stringify(arr, null, 2), 'utf8'); } catch (e) { console.error('saveCveHistory', e && e.message); }
-}
-
-// update CVE history from source and persist
-async function updateCveHistoryFromSource() {
-  try {
-    // Prefer NVD for historical counts (more complete). If it fails, fall back to CIRCL.
-    try {
-      const arr = await fetchCveCountsFromNvd();
-      if (Array.isArray(arr) && arr.length) {
-        const last30 = arr.slice(-30);
-        await saveCveHistory(last30);
-        return last30;
-      }
-    } catch (nvdErr) {
-      console.error('NVD fetch failed, trying feed fallback then falling back to CIRCL', nvdErr && nvdErr.message);
-      try {
-        const feedArr = await fetchCveCountsFromNvdFeed();
-        if (Array.isArray(feedArr) && feedArr.length) {
-          const last30f = feedArr.slice(-30);
-          await saveCveHistory(last30f);
-          return last30f;
-        }
-      } catch (feedErr) {
-        console.error('NVD feed fallback failed', feedErr && feedErr.message);
-      }
-    }
-    const arr2 = await computeCveCountsFromSource();
-    if (Array.isArray(arr2) && arr2.length) {
-      const last30b = arr2.slice(-30);
-      await saveCveHistory(last30b);
-      return last30b;
-    }
-  } catch (e) { console.error('updateCveHistoryFromSource', e && e.message); }
-  return null;
-}
-
-// Fetch count of CVEs for a single day (YYYY-MM-DD). Prefer NVD v2, fall back to CIRCL parsing.
-async function fetchCountForSingleDay(dayStr) {
-  // build start/end ISO strings
-  const start = new Date(dayStr + 'T00:00:00Z');
-  const end = new Date(dayStr + 'T23:59:59Z');
-  const headers = { 'User-Agent': 'CVE-dashboard/1.0 (https://example)' };
-  if (process.env.NVD_API_KEY) headers['apiKey'] = process.env.NVD_API_KEY;
-  try {
-    const base2 = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
-    const ps = 2000; let startIndex = 0; let totalResults = Infinity; let fetched = 0; let loop = 0; let count = 0;
-    while (fetched < totalResults && loop < 100) {
-      const url = `${base2}?pubStartDate=${encodeURIComponent(start.toISOString())}&pubEndDate=${encodeURIComponent(end.toISOString())}&resultsPerPage=${ps}&startIndex=${startIndex}`;
-      const r = await fetch(url, { headers });
-      if (!r.ok) throw new Error('NVD v2 error ' + r.status);
-      const j = await r.json();
-      const items = (j && j.vulnerabilities) || [];
-      count += items.length;
-      fetched += items.length; startIndex += items.length; loop++;
-      if (items.length === 0) break;
-      await sleep(600);
-    }
-    return count;
-  } catch (e) {
-    // fallback: compute from CIRCL recent feed
-    try {
-      const arr = await computeCveCountsFromSource();
-      const found = (arr || []).find(x => x.date === dayStr);
-      return found ? found.count : 0;
-    } catch (e2) { return 0; }
-  }
-}
-
-// Update only the previous day's count at midnight and persist into cve_history.json
-async function updatePreviousDayCount() {
-  const now = new Date();
-  const prev = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const dayStr = prev.toISOString().slice(0,10);
-  try {
-    const cnt = await fetchCountForSingleDay(dayStr);
-    // read existing history
-    const HIST = path.join(__dirname, 'cve_history.json');
-    let arr = [];
-    try { arr = JSON.parse(await fs.readFile(HIST, 'utf8')); } catch (e) { arr = []; }
-    if (!Array.isArray(arr)) arr = [];
-    // replace or add
-    const idx = arr.findIndex(x => x.date === dayStr);
-    if (idx >= 0) arr[idx].count = cnt; else arr.push({ date: dayStr, count: cnt });
-    // ensure sorted and keep last 90 days max
-    arr = arr.sort((a,b)=> a.date < b.date ? -1 : 1).slice(-90);
-    await saveCveHistory(arr);
-    return { date: dayStr, count: cnt };
-  } catch (e) {
-    console.error('updatePreviousDayCount', e && e.message);
-    throw e;
-  }
-}
-
-// Fetch CVE items from NVD REST API and compute daily counts for last 30 days
-async function fetchCveCountsFromNvd() {
-  const base = 'https://services.nvd.nist.gov/rest/json/cves/1.0';
-  const now = new Date();
-  const counts = {};
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const key = d.toISOString().slice(0, 10);
-    counts[key] = 0;
-  }
-  // build query window: from 30 days ago 00:00 UTC to now
-  const startDate = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
-  startDate.setUTCHours(0,0,0,0);
-  const endDate = new Date();
-  endDate.setUTCHours(23,59,59,999);
-  function nvdDateString(d) {
-    // format: YYYY-MM-DDTHH:MM:SS:000 UTC-00:00
-    const Y = d.getUTCFullYear(); const M = String(d.getUTCMonth()+1).padStart(2,'0'); const D = String(d.getUTCDate()).padStart(2,'0');
-    const h = String(d.getUTCHours()).padStart(2,'0'); const m = String(d.getUTCMinutes()).padStart(2,'0'); const s = String(d.getUTCSeconds()).padStart(2,'0');
-    return `${Y}-${M}-${D}T${h}:${m}:${s}:000 UTC-00:00`;
-  }
-  const ps = 2000; let startIndex = 0; let totalResults = Infinity; let fetched = 0; let loop = 0;
-  const headers = { 'User-Agent': 'CVE-dashboard/1.0 (https://example)' };
-  if (process.env.NVD_API_KEY) headers['apiKey'] = process.env.NVD_API_KEY;
-  // First try NVD v1 REST endpoint. If it returns 403 or fails, fall back to v2.
-  try {
-    while (fetched < totalResults && loop < 100) {
-      const url = `${base}?pubStartDate=${encodeURIComponent(nvdDateString(startDate))}&pubEndDate=${encodeURIComponent(nvdDateString(endDate))}&startIndex=${startIndex}&resultsPerPage=${ps}`;
-      console.log('NVD v1 request:', url);
-      const r = await fetch(url, { headers });
-      if (!r.ok) {
-        const txt = await r.text().catch(() => '<no-body>');
-        console.error('NVD v1 response:', r.status, (txt && txt.slice) ? txt.slice(0,200) : txt);
-        const err = new Error('NVD API error ' + r.status + ' ' + ((txt && txt.slice) ? txt.slice(0,200) : ''));
-        err.status = r.status;
-        throw err;
-      }
-      const j = await r.json();
-      const items = (j && j.result && j.result.CVE_Items) || [];
-      items.forEach(it => {
-        const pd = it.publishedDate || (it.published && it.publishedDate) || null;
-        if (!pd) return;
-        const day = (new Date(pd)).toISOString().slice(0,10);
-        if (counts.hasOwnProperty(day)) counts[day]++;
-      });
-      // be polite to NVD: pause between paged requests (avoid 429/403)
-      await sleep(800);
-      totalResults = (j && j.totalResults) || ((j && j.resultsPerPage) ? j.resultsPerPage : items.length);
-      fetched += items.length;
-      startIndex += items.length;
-      loop++;
-      if (items.length === 0) break;
-    }
-  } catch (v1err) {
-    // If v1 is blocked (403) or otherwise fails, try the v2 API which may accept the key/IP.
-    try {
-      const base2 = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
-      // reset counters for v2 fetch
-      fetched = 0; startIndex = 0; loop = 0; totalResults = Infinity;
-      // Use a simpler v2 query (paged) and filter dates client-side to avoid date-format issues
-      while (fetched < totalResults && loop < 100) {
-        const url = `${base2}?pubStartDate=${encodeURIComponent(startDate.toISOString())}&pubEndDate=${encodeURIComponent(endDate.toISOString())}&resultsPerPage=${ps}&startIndex=${startIndex}`;
-        console.log('NVD v2 request (filtered):', url);
-        const r = await fetch(url, { headers });
-        if (!r.ok) {
-          const txt = await r.text().catch(() => '<no-body>');
-          console.error('NVD v2 response:', r.status, (txt && txt.slice) ? txt.slice(0,200) : txt);
-          throw new Error('NVD v2 API error ' + r.status + ' ' + ((txt && txt.slice) ? txt.slice(0,200) : ''));
-        }
-        const j = await r.json();
-        const items = (j && j.vulnerabilities) || [];
-        console.log('NVD v2 page', loop, 'items', items.length, 'totalResults', j && j.totalResults);
-        items.forEach(it => {
-          // try multiple locations for published date and only count items within our 30-day window
-          const candidates = [];
-          if (it.published) candidates.push(it.published);
-          if (it.publishedDate) candidates.push(it.publishedDate);
-          if (it.cve) {
-            if (it.cve.published) candidates.push(it.cve.published);
-            if (it.cve.publishedDate) candidates.push(it.cve.publishedDate);
-            if (it.cve.lastModifiedDate) candidates.push(it.cve.lastModifiedDate);
-          }
-          let pd = null;
-          for (const c of candidates) {
-            if (!c) continue;
-            const d = new Date(c);
-            if (!isNaN(d.getTime())) { pd = d.toISOString(); break; }
-            const m = (c && c.match && c.match(/(\d{4}-\d{2}-\d{2})/)) || null;
-            if (m) { pd = m[1]; break; }
-          }
-          if (!pd) return;
-          const day = pd.slice(0,10);
-          if (counts.hasOwnProperty(day)) counts[day]++;
-        });
-        // pause between paged requests to avoid hitting rate limits
-        await sleep(800);
-        totalResults = (j && j.totalResults) || ((j && j.resultsPerPage) ? j.resultsPerPage : items.length);
-        fetched += items.length;
-        startIndex += items.length;
-        loop++;
-        if (items.length === 0) break;
-      }
-    } catch (v2err) {
-      // rethrow original or v2 error to be handled by caller
-      throw v2err || v1err;
-    }
-  }
-  return Object.keys(counts).sort().map(d => ({ date: d, count: counts[d] }));
-}
-
-// If NVD REST API is blocked (403), try downloading the yearly JSON feeds (gz) and parsing locally
-async function fetchCveCountsFromNvdFeed() {
-  const now = new Date();
-  const counts = {};
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    counts[d.toISOString().slice(0,10)] = 0;
-  }
-  // Allow using local NVD feed files (set NVD_FEED_DIR to a directory containing nvdcve-1.1-YYYY.json.gz)
-  const localDir = process.env.NVD_FEED_DIR;
-  const years = [now.getUTCFullYear(), now.getUTCFullYear() - 1];
-  if (localDir) {
-    try {
-      const dirents = await fs.readdir(localDir);
-      for (const f of dirents) {
-        if (!/nvdcve-1\.1-\d{4}\.json\.gz$/.test(f)) continue;
-        try {
-          const buf = await fs.readFile(path.join(localDir, f));
-          const out = zlib.gunzipSync(buf).toString('utf8');
-          const j = JSON.parse(out);
-          const items = j.CVE_Items || [];
-          items.forEach(it => {
-            const pd = it.publishedDate || it.published || null;
-            if (!pd) return;
-            const day = (new Date(pd)).toISOString().slice(0,10);
-            if (counts.hasOwnProperty(day)) counts[day]++;
-          });
-        } catch (e) { console.error('local feed parse error', f, e && e.message); }
-      }
-      return Object.keys(counts).sort().map(d => ({ date: d, count: counts[d] }));
-    } catch (e) { console.warn('NVD_FEED_DIR read failed', e && e.message); }
-  }
-  // fallback: remote download of yearly feeds
-  for (const y of years) {
-    const url = `https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-${y}.json.gz`;
-    try {
-      console.log('NVD feed request:', url);
-      const r = await fetch(url, { headers: { 'User-Agent': 'CVE-dashboard/1.0 (https://example)' } });
-      if (!r.ok) {
-        const txt = await r.text().catch(() => '<no-body>');
-        console.warn('NVD feed fetch failed', r.status, (txt && txt.slice) ? txt.slice(0,200) : txt);
-        continue;
-      }
-      const buf = Buffer.from(await r.arrayBuffer());
-      const out = zlib.gunzipSync(buf).toString('utf8');
-      const j = JSON.parse(out);
-      const items = j.CVE_Items || [];
-      items.forEach(it => {
-        const pd = it.publishedDate || it.published || null;
-        if (!pd) return;
-        const day = (new Date(pd)).toISOString().slice(0,10);
-        if (counts.hasOwnProperty(day)) counts[day]++;
-      });
-    } catch (e) {
-      console.error('fetchCveCountsFromNvdFeed error', e && e.message);
-    }
-  }
-  return Object.keys(counts).sort().map(d => ({ date: d, count: counts[d] }));
-}
-
-// schedule nightly update at local 00:00
-function scheduleNightlyUpdate() {
-  const now = new Date();
-  const next = new Date(now);
-  next.setHours(24,0,0,0);
-  const delay = next.getTime() - now.getTime();
-  setTimeout(async () => {
-    // At midnight update the previous day's CVE count specifically
-    await updatePreviousDayCount();
-    setInterval(updatePreviousDayCount, 24 * 60 * 60 * 1000);
-  }, delay);
-}
-
-// seed/prefill on startup, then update hourly (CIRCL-based)
-updateCveHistoryFromSource().then(() => {
-  // run hourly
-  setInterval(updateCveHistoryFromSource, 60 * 60 * 1000);
-}).catch(() => {
-  setInterval(updateCveHistoryFromSource, 60 * 60 * 1000);
-});
-// also schedule nightly update (keeps earlier behavior)
-scheduleNightlyUpdate();
-
-// Aggregated RSS/Atom news feed for IT/security sources
-app.get('/api/rss', async (req, res) => {
-  console.log('/api/rss requested');
-  // Curated feed list (user's FreshRSS selection), CVE feeds excluded
-  const feeds = [
-    'https://www.advania.se/nyheter/rss.xml',
-    'https://computersweden.se/feed/',
-    'https://www.bleepingcomputer.com/feed/',
-    'https://feeds.feedburner.com/TheHackersNews',
-    'https://techcrunch.com/feed/',
-    'https://www.neowin.net/rss/index.xml',
-    'https://www.securityweek.com/feed/',
-    'https://www.schneier.com/blog/atom.xml',
-    'https://www.reddit.com/r/netsec/.rss'
-  ];
-  const count = parseInt(req.query.count || '50', 10);
-  const offset = parseInt(req.query.offset || '0', 10);
-
-  // Cache feeds in-memory and refresh every 10 minutes
-  const RSS_TTL = 10 * 60 * 1000; // 10 minutes
-  if (!global._rssCache) global._rssCache = { items: [], updated: 0, promise: null };
-
-  async function fetchFeeds() {
-    const results = await Promise.allSettled(feeds.map(u => fetch(u).then(r => r.text())));
-    const items = [];
-    const pushItem = (title, link, date, source) => {
-      if (!title || !link) return;
-      const d = date ? new Date(date) : new Date();
-      items.push({ title: title.trim(), link: link.trim(), pubDate: d.toISOString(), source });
-    };
-    for (let i = 0; i < results.length; i++) {
-      const source = feeds[i];
-      if (results[i].status !== 'fulfilled') continue;
-      const text = results[i].value;
-      const itemRe = /<item[\s\S]*?<\/item>/gi;
-      const entryRe = /<entry[\s\S]*?<\/entry>/gi;
-      const matchItems = text.match(itemRe) || [];
-      const matchEntries = text.match(entryRe) || [];
-      const extract = (blk) => {
-        const t = (blk.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
-        let l = (blk.match(/<link[^>]*href=["']([^"']+)["']/i) || [])[1];
-        if (!l) l = (blk.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1] || '';
-        const pd = (blk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) || [])[1]
-                || (blk.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i) || [])[1]
-                || (blk.match(/<dc:date[^>]*>([\s\S]*?)<\/dc:date>/i) || [])[1]
-                || '';
-        return { t, l, pd };
-      };
-      matchItems.forEach(b => { const {t,l,pd}=extract(b); pushItem(t,l,pd,source); });
-      matchEntries.forEach(b => { const {t,l,pd}=extract(b); pushItem(t,l,pd,source); });
-    }
-    items.sort((a,b)=> new Date(b.pubDate) - new Date(a.pubDate));
-    return items;
-  }
-
-  try {
-    const now = Date.now();
-    const cache = global._rssCache;
-    if (cache.items.length > 0 && (now - cache.updated) < RSS_TTL) {
-      return res.json(cache.items.slice(offset, offset + count));
-    }
-    if (cache.promise) {
-      const items = await cache.promise;
-      return res.json(items.slice(offset, offset + count));
-    }
-    cache.promise = fetchFeeds().then(items => {
-      cache.items = items;
-      cache.updated = Date.now();
-      cache.promise = null;
-      return items;
-    }).catch(err => {
-      cache.promise = null;
-      throw err;
-    });
-    const items = await cache.promise;
-    res.json(items.slice(offset, offset + count));
-  } catch (err) {
-    console.error('/api/rss error', err && err.message);
-    res.status(500).json({ error: err.message || 'fetch failed' });
-  }
 });
 
-// Note: previous simple aggregator removed to avoid duplicate routes.
+// =========================================================================
+//  STARTUP & SCHEDULING
+// =========================================================================
+const PORT = settings.server.port || process.env.PORT || 3000;
 
-// Export helpers so external scripts can trigger updates (useful for CLI runs)
-module.exports = {
-  updateCveHistoryFromSource,
-  updatePreviousDayCount,
-  fetchCveCountsFromNvd,
-  fetchCveCountsFromNvdFeed,
-  computeCveCountsFromSource
-};
+(async () => {
+  // Prefill uptime if DB is empty
+  prefillUptime();
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
+  // Backfill CVSS scores for existing rows
+  backfillCvssScores();
+
+  // Initial data polls
+  console.log('Polling CVEs...');
+  await pollCves();
+
+  // Backfill CVEs from NVD if DB is sparse (rate-limited, runs in background)
+  backfillCvesFromNvd().catch(e => console.error('backfillCves error:', e && e.message));
+  console.log('Polling News...');
+  await pollNews();
+  console.log('Checking services (live ping for uptime)...');
+  await checkServices();
+
+  // Update CVE daily counts
+  updateCveDailyCounts();
+
+  // Fast service polls for UI responsiveness
+  pollMicrosoftFast().catch(() => {});
+  setInterval(() => pollMicrosoftFast().catch(() => {}), (settings.services.microsoft.pollIntervalSeconds || 10) * 1000);
+  pollCloudflareAws().catch(() => {});
+  setInterval(() => pollCloudflareAws().catch(() => {}), 60 * 1000);
+
+  // Scheduled polls
+  setInterval(pollCves, settings.polling.cveIntervalMinutes * 60 * 1000);
+  setInterval(pollNews, settings.polling.newsIntervalMinutes * 60 * 1000);
+  setInterval(async () => {
+    await checkServices();
+    updateCveDailyCounts();
+  }, settings.polling.uptimeIntervalMinutes * 60 * 1000);
+
+  app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
+})();

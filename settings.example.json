@@ -1,0 +1,63 @@
+{
+  "siteName": "Security dashboard",
+  "logo": "",
+  "server": {
+    "port": 3000
+  },
+  "polling": {
+    "cveIntervalMinutes": 10,
+    "newsIntervalMinutes": 5,
+    "uptimeIntervalMinutes": 60,
+    "cveMaxAgeDays": 60,
+    "newsMaxAgeDays": 60,
+    "uptimeMaxAgeDays": 30,
+    "uptimeDisplayHours": 24,
+    "uptimePrefillDays": 30,
+    "cveInitialFetchCount": 100
+  },
+  "services": {
+    "microsoft": {
+      "hosts": [
+        "https://outlook.office365.com/",
+        "https://login.microsoftonline.com/",
+        "https://portal.office.com/"
+      ],
+      "statusPage": "https://status.cloud.microsoft",
+      "pollIntervalSeconds": 10,
+      "timeoutMs": 4000
+    },
+    "cloudflare": {
+      "hosts": [
+        "https://1.1.1.1/cdn-cgi/trace",
+        "https://1.0.0.1/cdn-cgi/trace"
+      ],
+      "statusPage": "https://www.cloudflarestatus.com",
+      "timeoutMs": 3000
+    },
+    "aws": {
+      "url": "https://status.aws.amazon.com/",
+      "statusPage": "https://health.aws.amazon.com/health/status",
+      "timeoutMs": 5000
+    },
+    "uptime": {
+      "url": "https://example.com/",
+      "timeoutMs": 8000
+    }
+  },
+  "cve": {
+    "circlLastUrl": "https://cve.circl.lu/api/last",
+    "circlCveUrl": "https://cve.circl.lu/api/cve",
+    "nvdV2Url": "https://services.nvd.nist.gov/rest/json/cves/2.0"
+  },
+  "rssFeeds": [
+    "https://www.bleepingcomputer.com/feed/",
+    "https://feeds.feedburner.com/TheHackersNews",
+    "https://techcrunch.com/feed/",
+    "https://www.securityweek.com/feed/",
+    "https://www.schneier.com/blog/atom.xml",
+    "https://www.reddit.com/r/netsec/.rss"
+  ],
+  "geoip": {
+    "apiUrl": "http://ip-api.com/json/{ip}?fields=status,countryCode"
+  }
+}

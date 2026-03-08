@@ -77,15 +77,28 @@ function getCvssNumeric(it){
   if(typeof it.cvss === 'number') return it.cvss;
   if(it.cvss && !isNaN(Number(it.cvss))) return Number(it.cvss);
   if(it.cvss3 && it.cvss3.baseScore) return Number(it.cvss3.baseScore);
-  // NVD v2 style inside containers.adp[*].metrics[*]
+  // NVD v2 metrics format
+  try{
+    if(it.metrics){
+      const m = it.metrics;
+      if(m.cvssMetricV31 && m.cvssMetricV31.length) return Number(m.cvssMetricV31[0].cvssData.baseScore);
+      if(m.cvssMetricV40 && m.cvssMetricV40.length) return Number(m.cvssMetricV40[0].cvssData.baseScore);
+      if(m.cvssMetricV30 && m.cvssMetricV30.length) return Number(m.cvssMetricV30[0].cvssData.baseScore);
+      if(m.cvssMetricV2 && m.cvssMetricV2.length) return Number(m.cvssMetricV2[0].cvssData.baseScore);
+    }
+  }catch(e){}
+  // NVD v2 style inside containers.adp[*] and CIRCL containers.cna
   try{
     const cont = it.containers || null;
-    if(cont && cont.adp && cont.adp.length){
-      for(const a of cont.adp){
+    if(cont){
+      const sources = [].concat(cont.adp || [], cont.cna ? [cont.cna] : []);
+      for(const a of sources){
         if(a.metrics && a.metrics.length){
           for(const m of a.metrics){
+            if(m.cvssV4_0 && m.cvssV4_0.baseScore) return Number(m.cvssV4_0.baseScore);
             if(m.cvssV3_1 && m.cvssV3_1.baseScore) return Number(m.cvssV3_1.baseScore);
             if(m.cvssV3 && m.cvssV3.baseScore) return Number(m.cvssV3.baseScore);
+            if(m.cvssV3_0 && m.cvssV3_0.baseScore) return Number(m.cvssV3_0.baseScore);
           }
         }
       }
@@ -211,6 +224,11 @@ function renderCveItems(items) {
     if (it.title) return it.title;
     if (it.summary && it.summary.length && it.summary.length < 140) return it.summary;
     if (it.cveMetadata && it.cveMetadata.title) return it.cveMetadata.title;
+    // NVD v2: short descriptions
+    if (Array.isArray(it.descriptions) && it.descriptions.length) {
+      const d = it.descriptions.find(d => d.lang === 'en') || it.descriptions[0];
+      if (d && d.value && d.value.length < 140) return d.value;
+    }
     if (it.containers && it.containers.cna) {
       const cna = it.containers.cna;
       if (cna.title) return cna.title;
@@ -230,6 +248,11 @@ function renderCveItems(items) {
     if (it.details) return it.details;
     if (it.description) return it.description;
     if (it.summary) return it.summary;
+    // NVD v2 format: descriptions array
+    if (Array.isArray(it.descriptions) && it.descriptions.length) {
+      const d = it.descriptions.find(d => d.lang === 'en') || it.descriptions[0];
+      if (d && d.value) return d.value;
+    }
     if (it.containers && it.containers.cna) {
       const cna = it.containers.cna;
       if (cna.descriptions && cna.descriptions.length) {
@@ -267,6 +290,14 @@ function renderCveItems(items) {
     else if (id && id.toUpperCase().startsWith('GHSA-')) url = 'https://github.com/advisories/' + encodeURIComponent(id);
     else if (it && it.url) url = it.url;
     const cvss = extractCvss(it);
+    // color-code CVSS score
+    let cvssStyle = '';
+    const cvssNum = parseFloat(cvss);
+    if (!isNaN(cvssNum)) {
+      if (cvssNum >= 9) cvssStyle = 'color:#e74c3c;font-weight:700';
+      else if (cvssNum >= 8) cvssStyle = 'color:#e67e22;font-weight:700';
+      else if (cvssNum >= 6) cvssStyle = 'color:#f1c40f;font-weight:600';
+    }
     const published = extractPublished(it);
     let rawSummary = extractSummary(it) || '';
     // Strip markdown to plain text: remove code blocks, headers, links, images, bold/italic, lists
@@ -312,7 +343,7 @@ function renderCveItems(items) {
     return `
       <div class="card">
         <div>${headHtml}${zeroHtml}</div>
-        <div class="meta">CVSS: ${cvss} • Published: ${published}</div>
+        <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • Published: ${published}</div>
         <div class="desc">${escapeHtml(summary)}</div>
       </div>
     `;
@@ -406,6 +437,13 @@ async function loadNews(offsetArg) {
       return;
     }
   }
+  // Fallback: if DB returned less than a full page and we're paging, try live source
+  if (offset > 0 && Array.isArray(news) && news.length < newsPageSize) {
+    try {
+      const more = await fetchJSON(`/api/rss/more?count=${newsPageSize}&offset=${offset}`);
+      if (Array.isArray(more) && more.length) news = news.concat(more);
+    } catch (e) { /* ignore fallback error */ }
+  }
   if (offset === 0) {
     container.innerHTML = renderNewsItems(news);
   } else {
@@ -429,7 +467,9 @@ async function preloadCves(offset) {
   if (_cvePreloading || _cvePreloaded !== null) return;
   _cvePreloading = true;
   try {
-    const data = await fetchJSON(`/api/cves?count=${cvePageSize}&offset=${offset}`);
+    let url = `/api/cves?count=${cvePageSize}&offset=${offset}`;
+    if (window._cvssMin) url += `&cvssMin=${window._cvssMin}`;
+    const data = await fetchJSON(url);
     _cvePreloaded = Array.isArray(data) ? data : [];
   } catch (e) { _cvePreloaded = []; }
   _cvePreloading = false;
@@ -448,19 +488,28 @@ async function loadCves(offsetArg) {
     _cvePreloaded = null;
   } else {
     try {
-      cves = await fetchJSON(`/api/cves?count=${cvePageSize}&offset=${offset}`);
+      let url = `/api/cves?count=${cvePageSize}&offset=${offset}`;
+      if (window._cvssMin) url += `&cvssMin=${window._cvssMin}`;
+      cves = await fetchJSON(url);
     } catch (e) {
       container.innerHTML = 'Error: ' + e.message;
       if (btn) { btn.disabled = false; btn.textContent = 'Load more'; btn.dataset.available = 'false'; }
       return;
     }
   }
+  // Fallback: if DB returned less than a full page and we're paging, try live source
+  if (offset > 0 && Array.isArray(cves) && cves.length < cvePageSize && !window._cvssMin) {
+    try {
+      const more = await fetchJSON(`/api/cves/more?count=${cvePageSize}&offset=${offset}`);
+      if (Array.isArray(more) && more.length) cves = cves.concat(more);
+    } catch (e) { /* ignore fallback error */ }
+  }
   // maintain client-side cache
   if (offset === 0) window._cves = [];
   if (Array.isArray(cves)) window._cves = window._cves.concat(cves);
   cveOffset = offset + (Array.isArray(cves) ? cves.length : 0);
-  // render filtered view
-  applyCvssFilterAndRender();
+  // render (server already filtered by CVSS when applicable)
+  container.innerHTML = renderCveItems(window._cves);
   if (btn) {
     btn.disabled = false;
     btn.textContent = 'Load more';
@@ -506,30 +555,39 @@ function init() {
   // fetch header status and charts
   fetchAndRenderStatus();
   fetchAndRenderUptime();
+  fetchUptimeStats();
   fetchAndRenderCveStats();
   setupCveSearch();
+  fetchVisitorIp();
+  fetchPublicSettings();
+  setupThemeToggle();
   // setup CVSS filter listener
   const sel = document.getElementById('cvss-filter');
-  if(sel){ sel.addEventListener('change', () => { window._cvssFilterValue = sel.value; applyCvssFilterAndRender(); }); }
+  if(sel){ sel.addEventListener('change', () => { window._cvssMin = sel.value === 'all' ? null : Number(sel.value); cveOffset = 0; _cvePreloaded = null; _cvePreloading = false; loadCves(0); }); }
   // init custom dropdown if present
   const dd = document.getElementById('cvss-dropdown');
   if(dd){
     const btn = document.getElementById('cvss-dropdown-btn');
     const menu = document.getElementById('cvss-dropdown-menu');
-    window._cvssFilterValue = 'all';
+    window._cvssMin = null;
     function closeMenu(){ if(menu){ menu.setAttribute('aria-hidden','true'); btn.setAttribute('aria-expanded','false'); } }
     function openMenu(){ if(menu){ menu.setAttribute('aria-hidden','false'); btn.setAttribute('aria-expanded','true'); } }
     btn.addEventListener('click', (e)=>{ e.stopPropagation(); const open = menu.getAttribute('aria-hidden') === 'false'; if(open) closeMenu(); else openMenu(); });
     // option clicks
     menu.querySelectorAll('.cvss-option').forEach(li=>{
       li.addEventListener('click', (ev)=>{
-        const v = li.getAttribute('data-value'); window._cvssFilterValue = v;
+        const v = li.getAttribute('data-value');
+        window._cvssMin = (v === 'all') ? null : Number(v);
         // update label on button
         btn.firstChild.nodeValue = (li.textContent || li.innerText) + ' ';
         // mark selected
         menu.querySelectorAll('.cvss-option').forEach(o=>o.removeAttribute('aria-selected'));
         li.setAttribute('aria-selected','true');
-        applyCvssFilterAndRender();
+        // reset pagination and reload from server
+        cveOffset = 0;
+        _cvePreloaded = null;
+        _cvePreloading = false;
+        loadCves(0);
         closeMenu();
       });
     });
@@ -575,6 +633,18 @@ async function fetchAndRenderStatus() {
     apply('svc-cloudflare', map['cloudflare'] || map['cloudflare_trace'] || map['1.1.1.1'], 'https://www.cloudflarestatus.com');
     apply('svc-aws', map['aws'] || map['status.aws'], 'https://health.aws.amazon.com/health/status');
     apply('svc-microsoft', map['microsoft'] || map['microsoft_o365'], 'https://status.cloud.microsoft');
+
+    // Render Microsoft tooltip with individual host status
+    const msEntry = map['microsoft'];
+    const msTip = document.getElementById('ms-tooltip');
+    if (msEntry && msEntry.hosts && msTip) {
+      msTip.innerHTML = msEntry.hosts.map(h => {
+        const bg = h.ok ? '#2ecc71' : '#e74c3c';
+        const shadow = h.ok ? '0 0 6px rgba(46,204,113,0.35)' : '0 0 6px rgba(231,76,60,0.2)';
+        const host = escapeHtml((h.host || '').replace(/\/+$/, ''));
+        return `<div class="ms-row"><span class="dot" style="background:${bg};box-shadow:${shadow}"></span><span>${host}</span></div>`;
+      }).join('');
+    }
   } catch (e) { console.error('status', e); }
 }
 
@@ -585,20 +655,17 @@ function renderSingleCve(it) {
 }
 
 function setupCveSearch(){
-  const btn = document.getElementById('cve-search-btn');
   const input = document.getElementById('cve-search');
-  const out = document.getElementById('cve-search-results');
-  if (!btn || !input || !out) return;
-  btn.addEventListener('click', async () => {
-    const q = (input.value || '').trim();
-    if (!q) { out.innerHTML = '<div class="meta">Enter a CVE id</div>'; return; }
-    // open cve.org in a new tab/window for the searched CVE
-    const up = q.toUpperCase();
-    const idMatch = up.match(/^CVE-\d{4}-\d{4,7}$/i);
-    let url;
-    if (idMatch) url = 'https://cve.org/' + up;
-    else url = 'https://cve.org/search?q=' + encodeURIComponent(q);
-    window.open(url, '_blank');
+  if (!input) return;
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const q = (input.value || '').trim();
+      if (!q) return;
+      const url = 'https://www.cve.org/CVERecord/SearchResults?query=' + encodeURIComponent(q);
+      window.open(url, '_blank');
+      input.value = '';
+    }
   });
 }
 
@@ -675,6 +742,10 @@ async function fetchAndRenderCveStats(){
     }
     const colors = counts.map(v => pickColor(v));
 
+    const isLight = document.documentElement.classList.contains('light-theme');
+    const tickColor = isLight ? 'rgba(40,20,60,0.6)' : 'rgba(255,255,255,0.6)';
+    const gridColor = isLight ? 'rgba(100,60,140,0.08)' : 'rgba(255,255,255,0.04)';
+
     window.cveChart = new Chart(ctx, {
       type: 'bar',
       data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderRadius:4 }] },
@@ -686,10 +757,82 @@ async function fetchAndRenderCveStats(){
         },
         scales: {
           x: { ticks: { display: false }, grid: { display: false } },
-          y: { beginAtZero: true, ticks: { color: 'rgba(255,255,255,0.85)' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+          y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } }
         },
         interaction: { mode: 'nearest', intersect: true },
       }
     });
   } catch (e) { console.error('cve-stats', e); }
+}
+
+// --- Visitor IP + country flag ---
+async function fetchVisitorIp() {
+  try {
+    const res = await fetchJSON('/api/myip');
+    const addrEl = document.getElementById('ip-addr');
+    const flagEl = document.getElementById('ip-flag');
+    if (addrEl && res.ip) addrEl.textContent = res.ip;
+    if (flagEl && res.countryCode) {
+      const cc = res.countryCode.toLowerCase();
+      flagEl.innerHTML = `<img src="https://flagcdn.com/20x15/${cc}.png" width="20" height="15" alt="${res.countryCode}" style="vertical-align:middle;border-radius:2px">`;
+    }
+  } catch (e) { console.error('visitor ip', e); }
+}
+
+// --- Uptime stats (30-day percentage) ---
+async function fetchUptimeStats() {
+  try {
+    const res = await fetchJSON('/api/uptime-stats');
+    const el = document.getElementById('uptime-pct');
+    if (!el) return;
+    const pct = res.percentage;
+    let text, color;
+    if (pct >= 100) { text = '100%'; color = '#2ecc71'; }
+    else if (pct >= 99) { text = pct.toFixed(1) + '%'; color = '#2ecc71'; }
+    else if (pct >= 95) { text = pct.toFixed(1) + '%'; color = '#f9a825'; }
+    else if (pct >= 90) { text = pct.toFixed(1) + '%'; color = '#e67e22'; }
+    else { text = pct.toFixed(1) + '%'; color = '#e74c3c'; }
+    el.innerHTML = `<span style="color:${color};font-weight:600">${text}</span> last 30 days`;
+  } catch (e) { console.error('uptime-stats', e); }
+}
+
+// --- Public settings (logo, site name) ---
+async function fetchPublicSettings() {
+  try {
+    const res = await fetchJSON('/api/settings/public');
+    if (res.siteName) {
+      const el = document.querySelector('.site-title');
+      if (el) el.textContent = res.siteName;
+      document.title = res.siteName;
+      // Update footer GitHub link text
+      const ghSpan = document.querySelector('.footer-github span');
+      if (ghSpan) ghSpan.textContent = res.siteName + ' on GitHub';
+    }
+    if (res.logo) {
+      const logoEl = document.querySelector('.logo');
+      if (logoEl) {
+        logoEl.innerHTML = `<img src="${escapeHtml(res.logo)}" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px">`;
+      }
+    }
+  } catch (e) { console.error('settings', e); }
+}
+
+// --- Light/Dark theme toggle ---
+function setupThemeToggle() {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const saved = localStorage.getItem('theme');
+  if (saved === 'light') document.documentElement.classList.add('light-theme');
+  updateThemeIcon();
+  btn.addEventListener('click', () => {
+    document.documentElement.classList.toggle('light-theme');
+    const isLight = document.documentElement.classList.contains('light-theme');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    updateThemeIcon();
+  });
+  function updateThemeIcon() {
+    const isLight = document.documentElement.classList.contains('light-theme');
+    btn.innerHTML = isLight ? '<i data-feather="moon"></i>' : '<i data-feather="sun"></i>';
+    if (window.feather) try { feather.replace(); } catch (e) {}
+  }
 }
