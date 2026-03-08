@@ -1,6 +1,11 @@
-node_modules
+node_modules/
 npm-debug.log
 .env
 dist
-/.git
-/*.tgz
+.git
+*.tgz
+dashboard.db
+dashboard.db-wal
+dashboard.db-shm
+settings.json
+*.log

@@ -5,6 +5,13 @@ services:
     image: lundstream/securitydashboard:latest
     ports:
       - "3000:3000"
+    volumes:
+      - dashboard-data:/app/data
+      # Mount your own settings.json to override defaults:
+      # - ./settings.json:/app/settings.json:ro
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+
+volumes:
+  dashboard-data:

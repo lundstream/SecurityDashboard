@@ -1,7 +1,10 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, 'dashboard.db');
+// Use /app/data in Docker (volume), otherwise project root
+const dataDir = fs.existsSync(path.join(__dirname, 'data')) ? path.join(__dirname, 'data') : __dirname;
+const DB_PATH = path.join(dataDir, 'dashboard.db');
 let db;
 
 function getDb() {
