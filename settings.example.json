@@ -64,5 +64,15 @@
   "geoip": {
     "apiUrl": "http://ip-api.com/json/{ip}?fields=status,countryCode"
   },
+  "links": {
+    "name": "Links",
+    "items": [
+      { "title": "CISA - Cyber Defense Agency", "url": "https://www.cisa.gov/" },
+      { "title": "Microsoft - Security Response Center", "url": "https://msrc.microsoft.com/" },
+      { "title": "Shadowserver - Dashboard", "url": "https://dashboard.shadowserver.org/" },
+      { "title": "Pishstats - Phishing intelligence", "url": "https://phishstats.info/search/" },
+      { "title": "Onetime secret - Send passwords etc.", "url": "https://onetimesecret.com/" }
+    ]
+  },
   "animatedBackground": true
 }
