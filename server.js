@@ -447,11 +447,18 @@ const _geoIpCache = new Map();
 const GEO_IP_TTL = 60 * 60 * 1000; // 1 hour
 
 async function lookupGeoIp(ip) {
+  // Skip lookup for private/reserved IPs (Docker bridge, localhost, etc.)
+  if (!ip || /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.|::1|localhost)/i.test(ip)) {
+    return { countryCode: '' };
+  }
   const cached = _geoIpCache.get(ip);
   if (cached && Date.now() - cached.ts < GEO_IP_TTL) return cached.data;
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
     const url = settings.geoip.apiUrl.replace('{ip}', encodeURIComponent(ip));
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
     const data = await r.json();
     if (data && data.status === 'success') {
       const result = { countryCode: data.countryCode };

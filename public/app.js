@@ -326,7 +326,7 @@ function renderCveItems(items) {
     if (summary.length > 300) {
       summary = summary.slice(0, 300).replace(/\s+\S*$/, '') + '…';
     }
-    if (!summary) summary = '(no summary)';
+    if (!summary) summary = 'Recently published \u2014 description pending';
     const zeroTag = /\bzero[- ]?day\b|\b0[- ]?day\b|zero\sday/i.test(summary) ? '<span class="tag">Possible Zero-Day</span>' : '';
     // Render as: ID: Title  (link the ID when present). Fall back to title when no ID.
     let headHtml = '';
@@ -509,7 +509,11 @@ async function loadCves(offsetArg) {
   if (Array.isArray(cves)) window._cves = window._cves.concat(cves);
   cveOffset = offset + (Array.isArray(cves) ? cves.length : 0);
   // render (server already filtered by CVSS when applicable)
-  container.innerHTML = renderCveItems(window._cves);
+  if (window._cves.length === 0 && window._cvssMin) {
+    container.innerHTML = '<div style="color:var(--muted);padding:12px">No CVEs with CVSS \u2265 ' + window._cvssMin + ' found yet. Data is still being collected.</div>';
+  } else {
+    container.innerHTML = renderCveItems(window._cves);
+  }
   if (btn) {
     btn.disabled = false;
     btn.textContent = 'Load more';
@@ -644,6 +648,8 @@ async function fetchAndRenderStatus() {
         const host = escapeHtml((h.host || '').replace(/\/+$/, ''));
         return `<div class="ms-row"><span class="dot" style="background:${bg};box-shadow:${shadow}"></span><span>${host}</span></div>`;
       }).join('');
+    } else if (msTip && msTip.textContent === 'Loading...') {
+      msTip.innerHTML = '<div class="ms-row" style="color:var(--muted)">Checking services…</div>';
     }
   } catch (e) { console.error('status', e); }
 }
@@ -821,6 +827,9 @@ async function fetchPublicSettings() {
 function setupThemeToggle() {
   const btn = document.getElementById('theme-toggle');
   if (!btn) return;
+  // Inline SVGs so toggle works even if feather-icons CDN is unavailable
+  const sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+  const moonSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
   const saved = localStorage.getItem('theme');
   if (saved === 'light') document.documentElement.classList.add('light-theme');
   updateThemeIcon();
@@ -832,7 +841,6 @@ function setupThemeToggle() {
   });
   function updateThemeIcon() {
     const isLight = document.documentElement.classList.contains('light-theme');
-    btn.innerHTML = isLight ? '<i data-feather="moon"></i>' : '<i data-feather="sun"></i>';
-    if (window.feather) try { feather.replace(); } catch (e) {}
+    btn.innerHTML = isLight ? moonSvg : sunSvg;
   }
 }
