@@ -9,6 +9,7 @@ const db = require('./db');
 const settings = JSON.parse(fs.readFileSync(path.join(__dirname, 'settings.json'), 'utf8'));
 
 const app = express();
+app.set('trust proxy', true);
 app.use(cors());
 
 // Serve public/ static files with no-cache for dev assets
@@ -465,19 +466,12 @@ async function lookupGeoIp(ip) {
 //  API ROUTES
 // =========================================================================
 
-// Visitor IP + country — use external service so we always get the public IP
+// Visitor IP + country — use x-forwarded-for behind proxy, fallback to direct connection
 app.get('/api/myip', async (req, res) => {
-  try {
-    // Try to get external/public IP from ip-api (returns requester's public IP when called with no argument)
-    const r = await fetch('http://ip-api.com/json/?fields=status,query,countryCode');
-    const data = await r.json();
-    if (data && data.status === 'success') {
-      return res.json({ ip: data.query || '', countryCode: data.countryCode || '' });
-    }
-  } catch (e) { /* fall through */ }
-  // Fallback: use request header
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '';
-  const cleanIp = ip.replace(/^::ffff:/, '');
+  // Prefer x-forwarded-for from reverse proxy, then direct socket IP
+  const raw = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.socket?.remoteAddress || '';
+  const cleanIp = raw.replace(/^::ffff:/, '');
+  // Lookup country for the visitor's IP
   const geo = await lookupGeoIp(cleanIp);
   res.json({ ip: cleanIp, countryCode: geo.countryCode || '' });
 });
@@ -713,9 +707,9 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   updateCveDailyCounts();
 
   // Fast service polls for UI responsiveness
-  pollMicrosoftFast().catch(() => {});
+  await pollMicrosoftFast().catch(() => {});
+  await pollCloudflareAws().catch(() => {});
   setInterval(() => pollMicrosoftFast().catch(() => {}), (settings.services.microsoft.pollIntervalSeconds || 10) * 1000);
-  pollCloudflareAws().catch(() => {});
   setInterval(() => pollCloudflareAws().catch(() => {}), 60 * 1000);
 
   // Scheduled polls
