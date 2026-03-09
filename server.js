@@ -1148,7 +1148,10 @@ app.get('/api/tools/ports', async (req, res) => {
 // =========================================================================
 const aiConfig = settings.ai || {};
 // Allow environment variables to override settings (useful for Docker)
-if (process.env.AI_GITHUB_TOKEN) aiConfig.githubToken = process.env.AI_GITHUB_TOKEN;
+if (process.env.AI_GITHUB_TOKEN) {
+  aiConfig.githubToken = process.env.AI_GITHUB_TOKEN;
+  aiConfig.enabled = true; // auto-enable when token is provided via env
+}
 if (process.env.AI_RUN_ON_BOOT !== undefined) aiConfig.runOnBoot = Number(process.env.AI_RUN_ON_BOOT);
 
 function buildAiPrompt(period) {
