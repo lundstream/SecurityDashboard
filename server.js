@@ -911,8 +911,34 @@ app.get('/api/settings/public', (req, res) => {
     siteName: settings.siteName || 'Security dashboard',
     logo: settings.logo || '',
     links,
-    animatedBackground: settings.animatedBackground !== false
+    animatedBackground: settings.animatedBackground !== false,
+    tickerFeed: settings.tickerFeed || '',
+    footerText: settings.footerText || '\u00a9 2026 lundstream.net, all rights reserved.',
+    showGithubLink: settings.showGithubLink !== false
   });
+});
+
+// Ticker RSS feed endpoint — fetches and parses a single RSS feed for the header ticker
+app.get('/api/ticker', async (req, res) => {
+  const feedUrl = settings.tickerFeed;
+  if (!feedUrl) return res.json([]);
+  try {
+    const resp = await fetch(feedUrl, { timeout: 10000 });
+    if (!resp.ok) return res.json([]);
+    const xml = await resp.text();
+    const items = [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+    let match;
+    while ((match = itemRegex.exec(xml)) !== null && items.length < 20) {
+      const block = match[1];
+      const title = (block.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/) || [])[1] || '';
+      const link = (block.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || '';
+      if (title.trim()) items.push({ title: title.trim(), link: link.trim() });
+    }
+    res.json(items);
+  } catch (e) {
+    res.json([]);
+  }
 });
 
 // Report data (supports ?period=week or ?period=month, ?vendor=name)
@@ -1154,7 +1180,8 @@ if (process.env.AI_GITHUB_TOKEN) {
 }
 if (process.env.AI_RUN_ON_BOOT !== undefined) aiConfig.runOnBoot = Number(process.env.AI_RUN_ON_BOOT);
 
-function buildAiPrompt(period) {
+function buildAiPrompt(period, language) {
+  language = language || 'en';
   const days = period === 'week' ? 7 : 30;
   const periodLabel = period === 'week' ? 'Weekly (Last 7 Days)' : 'Monthly (Last 30 Days)';
 
@@ -1185,29 +1212,37 @@ function buildAiPrompt(period) {
     `  [${n.source}] ${n.title}`
   ).join('\n');
 
-  return `You are an IT security analyst. Provide a concise ${periodLabel} security analysis based on the data below.
+  const langInstruction = language === 'sv'
+    ? 'Write the ENTIRE response in Swedish. All section headers and body text must be in Swedish. Keep CVE IDs and vendor names in their original English form.'
+    : 'Write the response in English.';
+
+  return `You are a senior IT security analyst. Provide a detailed and thorough ${periodLabel} security analysis based on the data below.
+${langInstruction}
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
-## Executive Summary
-A brief 2-3 sentence overview of the threat landscape this period.
+## ${language === 'sv' ? 'Sammanfattning' : 'Executive Summary'}
+A thorough overview of the threat landscape this period (4-6 sentences). Cover the overall trend, volume changes, and notable patterns.
 
-## Key Threats & Vulnerabilities
-Highlight the most critical CVEs, especially KEV entries and unpatched high-severity issues. Mention affected vendors and potential impact.
+## ${language === 'sv' ? 'Kritiska hot och s\u00e5rbarheter' : 'Key Threats & Vulnerabilities'}
+Provide an in-depth analysis of the most critical CVEs, especially KEV entries and unpatched high-severity issues. For each major CVE, explain the affected technology, potential attack vectors, real-world impact, and urgency. Group related vulnerabilities where relevant.
 
-## Vendor Risk Overview
-Analyze which vendors pose the highest risk based on CVE volume and severity.
+## ${language === 'sv' ? 'Leverant\u00f6rsriskanalys' : 'Vendor Risk Overview'}
+Analyze which vendors pose the highest risk based on CVE volume and severity. Discuss patterns, recurring issues, and what it means for organizations using those products.
 
-## Trending Security News
-Summarize the most important security news items and what they mean for organizations.
+## ${language === 'sv' ? 'S\u00e4kerhetsnyheter och trender' : 'Trending Security News'}
+Summarize the most important security news items and analyze what they mean for organizations. Highlight emerging threat patterns and industry developments.
 
-## Recommendations
-Provide 3-5 actionable recommendations for IT security teams based on this data.
+## ${language === 'sv' ? 'P\u00e5verkan och riskbed\u00f6mning' : 'Impact & Risk Assessment'}
+Assess the overall risk level for this period. What types of organizations are most affected? What attack surfaces are most targeted?
 
-Keep the total response under 800 words. Be specific and reference actual CVE IDs and vendor names from the data.
+## ${language === 'sv' ? 'Rekommendationer' : 'Recommendations'}
+Provide 5-8 specific, actionable recommendations for IT security teams based on this data. Prioritize by urgency and impact.
+
+Aim for approximately 1200-1500 words. Be specific and reference actual CVE IDs and vendor names from the data. Provide depth and context, not just summaries.
 
 --- DATA ---
 PERIOD: ${periodLabel}
-STATS: ${stats.total} total CVEs, ${stats.critical} critical (CVSS≥9), ${stats.kevCount} known exploited
+STATS: ${stats.total} total CVEs, ${stats.critical} critical (CVSS>=9), ${stats.kevCount} known exploited
 
 TOP VENDORS:
 ${vendorSummary || '  No vendor data available'}
@@ -1225,7 +1260,8 @@ RECENT SECURITY NEWS:
 ${newsSummary || '  No news available'}`;
 }
 
-async function runAiAnalysis(period) {
+async function runAiAnalysis(period, language) {
+  language = language || 'en';
   if (!aiConfig.enabled) {
     console.log('[AI] Analysis disabled in settings');
     return null;
@@ -1235,11 +1271,11 @@ async function runAiAnalysis(period) {
     return null;
   }
 
-  const prompt = buildAiPrompt(period);
+  const prompt = buildAiPrompt(period, language);
   const model = aiConfig.model || 'openai/gpt-4o-mini';
   const maxTokens = aiConfig.maxTokens || 4000;
 
-  console.log(`[AI] Running ${period} analysis with model ${model}...`);
+  console.log(`[AI] Running ${period} analysis (${language}) with model ${model}...`);
 
   try {
     const resp = await fetch('https://models.inference.ai.azure.com/chat/completions', {
@@ -1251,7 +1287,9 @@ async function runAiAnalysis(period) {
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: 'You are a professional IT security analyst writing concise security reports. Use markdown formatting.' },
+          { role: 'system', content: language === 'sv'
+            ? 'Du \u00e4r en professionell IT-s\u00e4kerhetsanalytiker som skriver detaljerade s\u00e4kerhetsrapporter p\u00e5 svenska. Anv\u00e4nd markdown-formatering.'
+            : 'You are a professional IT security analyst writing detailed security reports. Use markdown formatting.' },
           { role: 'user', content: prompt }
         ],
         max_tokens: maxTokens,
@@ -1273,8 +1311,8 @@ async function runAiAnalysis(period) {
       return null;
     }
 
-    db.saveAiAnalysis(period, analysis);
-    console.log(`[AI] ${period} analysis saved (${analysis.length} chars)`);
+    db.saveAiAnalysis(period, analysis, language);
+    console.log(`[AI] ${period} (${language}) analysis saved (${analysis.length} chars)`);
     return analysis;
   } catch (e) {
     console.error('[AI] Analysis failed:', e.message);
@@ -1282,10 +1320,17 @@ async function runAiAnalysis(period) {
   }
 }
 
+async function runAiAnalysisBothLanguages(period) {
+  const en = await runAiAnalysis(period, 'en');
+  const sv = await runAiAnalysis(period, 'sv');
+  return { en, sv };
+}
+
 // API: Get latest AI analysis
 app.get('/api/ai-analysis', (req, res) => {
   const period = req.query.period === 'week' ? 'week' : 'month';
-  const result = db.getLatestAiAnalysis(period);
+  const language = req.query.lang === 'sv' ? 'sv' : 'en';
+  const result = db.getLatestAiAnalysis(period, language);
   if (!result) return res.json({ analysis: null, generatedAt: null });
   res.json({ analysis: result.analysis, generatedAt: result.generated_at });
 });
@@ -1293,8 +1338,8 @@ app.get('/api/ai-analysis', (req, res) => {
 // API: Manually trigger AI analysis
 app.post('/api/ai-analysis/trigger', (req, res) => {
   const period = req.query.period === 'week' ? 'week' : 'month';
-  runAiAnalysis(period).then(analysis => {
-    if (analysis) res.json({ ok: true, period, length: analysis.length });
+  runAiAnalysisBothLanguages(period).then(result => {
+    if (result.en || result.sv) res.json({ ok: true, period, en: !!(result.en), sv: !!(result.sv) });
     else res.json({ ok: false, error: 'Analysis failed or disabled — check server logs' });
   }).catch(e => res.status(500).json({ ok: false, error: e.message }));
 });
@@ -1318,11 +1363,11 @@ function scheduleAiAnalysis() {
 
     // Weekly: Sunday at 23:xx (run once during the 23:00 hour)
     if (day === 0 && hour === 23 && minute < 60) {
-      const lastWeekly = db.getLatestAiAnalysis('week');
+      const lastWeekly = db.getLatestAiAnalysis('week', 'en');
       const today = now.toISOString().slice(0, 10);
       if (!lastWeekly || !lastWeekly.generated_at || lastWeekly.generated_at.slice(0, 10) !== today) {
         console.log('[AI] Scheduled weekly analysis starting...');
-        await runAiAnalysis('week');
+        await runAiAnalysisBothLanguages('week');
       }
     }
 
@@ -1331,11 +1376,11 @@ function scheduleAiAnalysis() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const isLastDay = tomorrow.getDate() === 1;
     if (isLastDay && hour === 23 && minute < 60) {
-      const lastMonthly = db.getLatestAiAnalysis('month');
+      const lastMonthly = db.getLatestAiAnalysis('month', 'en');
       const today = now.toISOString().slice(0, 10);
       if (!lastMonthly || !lastMonthly.generated_at || lastMonthly.generated_at.slice(0, 10) !== today) {
         console.log('[AI] Scheduled monthly analysis starting...');
-        await runAiAnalysis('month');
+        await runAiAnalysisBothLanguages('month');
       }
     }
   }, 30 * 60 * 1000); // Check every 30 minutes
@@ -1418,7 +1463,7 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   // Run AI analysis on boot if runOnBoot is set to 1
   if (aiConfig.enabled && (aiConfig.runOnBoot === 1 || aiConfig.runOnBoot === true)) {
     console.log('[AI] runOnBoot enabled — triggering analysis...');
-    runAiAnalysis('week').then(() => runAiAnalysis('month')).catch(e => console.error('[AI] Boot analysis error:', e.message));
+    runAiAnalysisBothLanguages('week').then(() => runAiAnalysisBothLanguages('month')).catch(e => console.error('[AI] Boot analysis error:', e.message));
   }
 
   app.listen(PORT, () => console.log(`Server listening on ${PORT}`));

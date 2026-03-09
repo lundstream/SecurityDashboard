@@ -63,6 +63,8 @@ function initTables() {
   try { d.exec(`ALTER TABLE cves ADD COLUMN has_patch INTEGER DEFAULT 0`); } catch (e) {}
   try { d.exec(`ALTER TABLE cves ADD COLUMN vendor TEXT`); } catch (e) {}
   try { d.exec(`ALTER TABLE cves ADD COLUMN discovered TEXT`); } catch (e) {}
+  // Migration: add language column to ai_analysis if missing
+  try { d.exec(`ALTER TABLE ai_analysis ADD COLUMN language TEXT NOT NULL DEFAULT 'en'`); } catch (e) {}
 
   // KEV (Known Exploited Vulnerabilities) cache
   d.exec(`
@@ -90,6 +92,7 @@ function initTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       period TEXT NOT NULL,
       analysis TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT 'en',
       generated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
@@ -345,12 +348,12 @@ function getVendorList(days) {
 }
 
 // --- AI analysis helpers ---
-function saveAiAnalysis(period, analysis) {
-  getDb().prepare(`INSERT INTO ai_analysis (period, analysis) VALUES (?, ?)`).run(period, analysis);
+function saveAiAnalysis(period, analysis, language) {
+  getDb().prepare(`INSERT INTO ai_analysis (period, analysis, language) VALUES (?, ?, ?)`).run(period, analysis, language || 'en');
 }
 
-function getLatestAiAnalysis(period) {
-  return getDb().prepare(`SELECT analysis, generated_at FROM ai_analysis WHERE period = ? ORDER BY generated_at DESC LIMIT 1`).get(period) || null;
+function getLatestAiAnalysis(period, language) {
+  return getDb().prepare(`SELECT analysis, generated_at FROM ai_analysis WHERE period = ? AND language = ? ORDER BY generated_at DESC LIMIT 1`).get(period, language || 'en') || null;
 }
 
 function getRecentNews(days) {

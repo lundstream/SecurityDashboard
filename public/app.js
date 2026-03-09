@@ -657,6 +657,7 @@ function init() {
   fetchVisitorIp();
   fetchPublicSettings();
   fetchAndRenderVendorDonut();
+  loadTicker();
   setupThemeToggle();
   // setup CVSS filter listener
   const sel = document.getElementById('cvss-filter');
@@ -931,7 +932,7 @@ async function fetchUptimeStats() {
   } catch (e) { console.error('uptime-stats', e); }
 }
 
-// --- Public settings (logo, site name, links) ---
+// --- Public settings (logo, site name, links, footer) ---
 async function fetchPublicSettings() {
   try {
     const res = await fetchJSON('/api/settings/public');
@@ -960,7 +961,43 @@ async function fetchPublicSettings() {
         ).join('');
       }
     }
+    // Footer text
+    if (res.footerText) {
+      const copy = document.querySelector('.copyright');
+      if (copy) copy.textContent = res.footerText;
+    }
+    // GitHub link visibility
+    if (res.showGithubLink === false) {
+      const ghLink = document.querySelector('.footer-github');
+      if (ghLink) ghLink.style.display = 'none';
+    }
   } catch (e) { console.error('settings', e); }
+}
+
+// --- RSS Ticker ---
+async function loadTicker() {
+  const track = document.getElementById('ticker-track');
+  if (!track) return;
+  try {
+    const items = await fetchJSON('/api/ticker');
+    if (!items || items.length === 0) {
+      const bar = document.getElementById('ticker-bar');
+      if (bar) bar.style.display = 'none';
+      return;
+    }
+    track.innerHTML = items.map(it =>
+      `<a href="${escapeHtml(it.link)}" target="_blank" rel="noopener">\u2022 ${escapeHtml(it.title)}</a>`
+    ).join('');
+    // Duplicate content so the scroll loops seamlessly
+    track.innerHTML += track.innerHTML;
+    // Adjust animation speed based on content width
+    const trackWidth = track.scrollWidth / 2;
+    const speed = Math.max(30, trackWidth / 50); // ~50px per second
+    track.style.animationDuration = speed + 's';
+  } catch (e) {
+    const bar = document.getElementById('ticker-bar');
+    if (bar) bar.style.display = 'none';
+  }
 }
 
 // --- Vendor donut chart on dashboard ---

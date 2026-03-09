@@ -173,7 +173,7 @@ function updateReportChartColors() {
   vendorChartInstance.update();
 }
 
-// Fetch public settings (logo, site name)
+// Fetch public settings (logo, site name, footer)
 async function fetchPublicSettings() {
   try {
     const res = await fetchJSON('/api/settings/public');
@@ -188,12 +188,21 @@ async function fetchPublicSettings() {
       const logoEl = document.querySelector('.logo');
       if (logoEl) logoEl.innerHTML = `<img src="${escapeHtml(res.logo)}" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px">`;
     }
+    if (res.footerText) {
+      const copy = document.querySelector('.copyright');
+      if (copy) copy.textContent = res.footerText;
+    }
+    if (res.showGithubLink === false) {
+      const ghLink = document.querySelector('.footer-github');
+      if (ghLink) ghLink.style.display = 'none';
+    }
   } catch (e) {}
 }
 
 let selectedVendors = [];
 let currentPeriod = 'month';
 let allVendors = [];
+let currentAiLang = 'en';
 
 async function setupVendorFilter() {
   const input = document.getElementById('vendor-search');
@@ -352,14 +361,22 @@ function setupPdfExport() {
 
     // Inject temporary PDF styles to hide pseudo-elements and force white bg
     const pdfStyle = document.createElement('style');
-    pdfStyle.textContent = 'body::before{display:none !important} body{background:#ffffff !important} .report-list a{color:#1a0a2e !important} h1,h2,h3{color:#1a0a2e !important} .badge-no{background:rgba(40,20,60,0.06) !important;color:rgba(40,20,60,0.5) !important} .badge-nopatch{background:rgba(200,40,40,0.08) !important;color:#c0392b !important}';
+    pdfStyle.textContent = 'body::before{display:none !important} body{background:#ffffff !important;display:block !important} .report-list a{color:#1a0a2e !important} h1,h2,h3{color:#1a0a2e !important} .badge-no{background:rgba(40,20,60,0.06) !important;color:rgba(40,20,60,0.5) !important} .badge-nopatch{background:rgba(200,40,40,0.08) !important;color:#c0392b !important} #ai-content h2,#ai-content h3{color:#8400ff !important} #ai-content strong{color:#1a0a2e !important} #ai-content a{color:#1a0a2e !important} #synthwave-canvas{display:none !important} .stat-number{-webkit-text-fill-color:#8400ff !important;color:#8400ff !important;background:none !important;-webkit-background-clip:unset !important;background-clip:unset !important} h1 svg,h1 i{display:none !important} .report-section{page-break-inside:avoid;break-inside:avoid} .card{page-break-inside:avoid;break-inside:avoid} #ai-card{page-break-inside:auto;break-inside:auto} #ai-content li{page-break-inside:avoid;break-inside:avoid} #ai-content h2,#ai-content h3{page-break-after:avoid;break-after:avoid} #ai-content p{page-break-inside:avoid;break-inside:avoid} .report-list .card{page-break-inside:avoid;break-inside:avoid}';
     document.head.appendChild(pdfStyle);
 
     // Override body for PDF: white bg, no honeycomb overlay
     bodyEl.style.cssText = 'margin:0;font-family:Inter,Arial,Helvetica,sans-serif;color:#1a0a2e;background:#ffffff;overflow:visible;height:auto;';
 
     // Apply PDF-friendly styles
-    mainContent.style.cssText = 'position:static;overflow:visible;max-height:none;padding:20px;background:#ffffff;color:#1a0a2e;';
+    // Add logo above the report title for PDF
+    const pdfLogo = document.createElement('div');
+    pdfLogo.id = 'pdf-logo';
+    pdfLogo.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:12px;';
+    pdfLogo.innerHTML = '<div style="width:44px;height:44px;border-radius:8px;background:linear-gradient(90deg,#ff4da6,#8400ff);display:flex;align-items:center;justify-content:center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg></div><span style="font-family:geist-mono,Orbitron,Inter,sans-serif;font-weight:700;font-size:1.2em;color:#1a0a2e">Security dashboard</span>';
+    const reportWrapper = mainContent.querySelector('div');
+    if (reportWrapper) reportWrapper.insertBefore(pdfLogo, reportWrapper.firstChild);
+
+    mainContent.style.cssText = 'position:static;overflow:visible;max-height:none;padding:20px;background:#ffffff;color:#1a0a2e;display:block;';
     if (header) header.style.display = 'none';
     if (footer) footer.style.display = 'none';
     if (vendorFilter) vendorFilter.style.display = 'none';
@@ -367,13 +384,42 @@ function setupPdfExport() {
     reportLists.forEach(l => { l.style.cssText = 'max-height:none;overflow:visible;'; });
     loadMoreBtns.forEach(b => { b.style.display = 'none'; });
 
-    // Force all cards to light styling
+    // Hide vendor chart section in PDF
+    const vendorSection = document.getElementById('vendor-title');
+    const vendorSectionEl = vendorSection ? vendorSection.closest('.report-section') : null;
+    const origVendorSection = vendorSectionEl ? vendorSectionEl.style.cssText : '';
+    if (vendorSectionEl) vendorSectionEl.style.display = 'none';
+
+    // Hide KEV, Patched, and NoPatch list sections in PDF
+    const kevSection = document.getElementById('kev-title');
+    const kevSectionEl = kevSection ? kevSection.closest('.report-section') : null;
+    const origKevSection = kevSectionEl ? kevSectionEl.style.cssText : '';
+    if (kevSectionEl) kevSectionEl.style.display = 'none';
+
+    const patchedSection = document.getElementById('patched-title');
+    const patchedSectionEl = patchedSection ? patchedSection.closest('.report-section') : null;
+    const origPatchedSection = patchedSectionEl ? patchedSectionEl.style.cssText : '';
+    if (patchedSectionEl) patchedSectionEl.style.display = 'none';
+
+    const nopatchSection = document.getElementById('nopatch-title');
+    const nopatchSectionEl = nopatchSection ? nopatchSection.closest('.report-section') : null;
+    const origNopatchSection = nopatchSectionEl ? nopatchSectionEl.style.cssText : '';
+    if (nopatchSectionEl) nopatchSectionEl.style.display = 'none';
+
+    // Save AI card original style BEFORE any modifications
+    const aiCard = document.getElementById('ai-card');
+    const origAiCard = aiCard ? aiCard.style.cssText : '';
+
+    // Force all cards to light styling (must capture originals before modifying aiCard)
     const allCards = mainContent.querySelectorAll('.card');
     const origCardStyles = [];
     allCards.forEach(c => {
       origCardStyles.push(c.style.cssText);
       c.style.cssText = c.style.cssText + ';background:rgba(255,255,255,0.95);border:1px solid rgba(100,60,140,0.12);color:#1a0a2e;box-shadow:0 2px 8px rgba(100,60,140,0.08);';
     });
+
+    // Remove AI card max-height so analysis is shown in full
+    if (aiCard) aiCard.style.cssText = 'overflow:visible;max-height:none;padding:16px;background:none;border:none;color:#1a0a2e;box-shadow:none;border-radius:0;';
 
     // Force text colors to dark
     const allMeta = mainContent.querySelectorAll('.meta, .desc, .generated-at, .stat-label');
@@ -410,7 +456,7 @@ function setupPdfExport() {
       image: { type: 'jpeg', quality: 0.95 },
       html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowHeight: document.body.scrollHeight, backgroundColor: '#ffffff' },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'], avoid: ['.card', '.stat-card'] }
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['.card', '.stat-card', '.report-section', 'li', 'h2', 'h3'] }
     };
 
     try {
@@ -418,6 +464,8 @@ function setupPdfExport() {
     } catch (e) { /* ignore */ }
 
     // Restore everything
+    const pdfLogoEl = document.getElementById('pdf-logo');
+    if (pdfLogoEl) pdfLogoEl.remove();
     pdfStyle.remove();
     bodyEl.style.cssText = origBody;
     mainContent.style.cssText = origMain;
@@ -425,9 +473,15 @@ function setupPdfExport() {
     if (footer) footer.style.cssText = origFooter;
     if (vendorFilter) vendorFilter.style.display = '';
     if (exportRow) exportRow.style.display = '';
+    if (vendorSectionEl) vendorSectionEl.style.cssText = origVendorSection;
+    if (kevSectionEl) kevSectionEl.style.cssText = origKevSection;
+    if (patchedSectionEl) patchedSectionEl.style.cssText = origPatchedSection;
+    if (nopatchSectionEl) nopatchSectionEl.style.cssText = origNopatchSection;
     reportLists.forEach((l, i) => { l.style.cssText = origListStyles[i]; });
     loadMoreBtns.forEach(b => { b.style.display = ''; });
     allCards.forEach((c, i) => { c.style.cssText = origCardStyles[i]; });
+    // Restore AI card AFTER allCards (since allCards also includes ai-card)
+    if (aiCard) aiCard.style.cssText = origAiCard;
     allMeta.forEach((el, i) => { el.style.cssText = origMetaStyles[i]; });
     allH2.forEach((el, i) => { el.style.cssText = origH2Styles[i]; });
     if (chartContainer) chartContainer.style.cssText = origChartContainer;
@@ -453,34 +507,74 @@ function setupPdfExport() {
   });
 }
 
-// Simple markdown to HTML (handles ##, **, `, ul, ol, p)
+// Markdown to HTML with nested list support (bullets inside numbered lists)
 function mdToHtml(md) {
   if (!md) return '';
   const lines = md.split('\n');
   let html = '';
-  let inUl = false, inOl = false;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Close lists if not a list item
-    if (inUl && !trimmed.startsWith('- ') && !trimmed.startsWith('* ')) { html += '</ul>'; inUl = false; }
-    if (inOl && !/^\d+[\.\)] /.test(trimmed)) { html += '</ol>'; inOl = false; }
+  // Stack tracks open list types: 'ul' or 'ol'
+  const stack = [];
+  let olLiOpen = false; // true when an <ol><li> is open and may receive nested <ul>
 
-    if (trimmed.startsWith('## ')) {
-      html += '<h2>' + escapeHtml(trimmed.slice(3)) + '</h2>';
-    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      if (!inUl) { html += '<ul>'; inUl = true; }
+  function closeTo(depth) {
+    while (stack.length > depth) {
+      const tag = stack.pop();
+      html += '</li></' + tag + '>';
+    }
+    olLiOpen = false;
+  }
+
+  function closeAll() { closeTo(0); }
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed === '') continue;
+
+    const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ');
+    const isNumbered = /^\d+[\.\)] /.test(trimmed);
+    const isHeading = trimmed.startsWith('## ');
+    const isSubHeading = trimmed.startsWith('### ');
+
+    if (isSubHeading) {
+      closeAll();
+      html += '<h3>' + inlineMd(trimmed.slice(4)) + '</h3>';
+    } else if (isHeading) {
+      closeAll();
+      html += '<h2>' + inlineMd(trimmed.slice(3)) + '</h2>';
+    } else if (isNumbered) {
+      // Close any nested ul first, but keep the parent ol
+      if (stack.length > 0 && stack[stack.length - 1] === 'ul') {
+        closeTo(stack.length - 1);
+      }
+      // Close previous ol li if open
+      if (olLiOpen) { html += '</li>'; olLiOpen = false; }
+      // If no ol on stack, close everything and start one
+      if (stack.length === 0 || stack[stack.length - 1] !== 'ol') {
+        closeAll();
+        html += '<ol>';
+        stack.push('ol');
+      }
+      html += '<li>' + inlineMd(trimmed.replace(/^\d+[\.\)] /, ''));
+      olLiOpen = true;
+    } else if (isBullet) {
+      // Nest inside an open ol li, or start a standalone ul
+      if (olLiOpen && (stack.length === 0 || stack[stack.length - 1] === 'ol')) {
+        html += '<ul>';
+        stack.push('ul');
+        olLiOpen = false;
+      }
+      if (stack.length === 0 || stack[stack.length - 1] !== 'ul') {
+        closeAll();
+        html += '<ul>';
+        stack.push('ul');
+      }
       html += '<li>' + inlineMd(trimmed.slice(2)) + '</li>';
-    } else if (/^\d+[\.\)] /.test(trimmed)) {
-      if (!inOl) { html += '<ol>'; inOl = true; }
-      html += '<li>' + inlineMd(trimmed.replace(/^\d+[\.\)] /, '')) + '</li>';
-    } else if (trimmed === '') {
-      // skip empty lines
     } else {
+      closeAll();
       html += '<p>' + inlineMd(trimmed) + '</p>';
     }
   }
-  if (inUl) html += '</ul>';
-  if (inOl) html += '</ol>';
+  closeAll();
   return html;
 }
 
@@ -493,7 +587,8 @@ function inlineMd(text) {
 }
 
 // Fetch and render AI analysis
-async function loadAiAnalysis() {
+async function loadAiAnalysis(lang) {
+  lang = lang || currentAiLang || 'en';
   const params = new URLSearchParams(window.location.search);
   const period = params.get('period') === 'week' ? 'week' : 'month';
   const contentEl = document.getElementById('ai-content');
@@ -501,7 +596,7 @@ async function loadAiAnalysis() {
   const genEl = document.getElementById('ai-generated-at');
 
   try {
-    const data = await fetchJSON('/api/ai-analysis?period=' + period);
+    const data = await fetchJSON('/api/ai-analysis?period=' + period + '&lang=' + lang);
     if (data.analysis) {
       contentEl.innerHTML = mdToHtml(data.analysis);
       if (data.generatedAt && genEl) {
@@ -509,11 +604,79 @@ async function loadAiAnalysis() {
         metaEl.style.display = 'block';
       }
     } else {
-      contentEl.innerHTML = '<span style="color:var(--muted)">No AI analysis available yet. Analysis runs automatically on Sunday nights (weekly) and end of month (monthly).</span>';
+      contentEl.innerHTML = '<span style="color:var(--muted)">' +
+        (lang === 'sv' ? 'Ingen AI-analys tillg\u00e4nglig \u00e4nnu.' : 'No AI analysis available yet. Analysis runs automatically on Sunday nights (weekly) and end of month (monthly).') +
+        '</span>';
     }
   } catch (e) {
-    contentEl.innerHTML = '<span style="color:var(--muted)">Could not load AI analysis.</span>';
+    contentEl.innerHTML = '<span style="color:var(--muted)">' +
+      (lang === 'sv' ? 'Kunde inte ladda AI-analys.' : 'Could not load AI analysis.') +
+      '</span>';
   }
+}
+
+// Language toggle for AI analysis + report headings
+function setupLangToggle() {
+  const btn = document.getElementById('lang-toggle-btn');
+  const label = document.getElementById('lang-label');
+  if (!btn) return;
+  function updateLabel() {
+    if (label) label.textContent = currentAiLang.toUpperCase();
+  }
+  updateLabel();
+  btn.addEventListener('click', () => {
+    currentAiLang = currentAiLang === 'en' ? 'sv' : 'en';
+    updateLabel();
+    loadAiAnalysis(currentAiLang);
+    translateHeadings(currentAiLang);
+  });
+}
+
+function translateHeadings(lang) {
+  const params = new URLSearchParams(window.location.search);
+  const period = params.get('period') === 'week' ? 'week' : 'month';
+  const periodLabel = lang === 'sv'
+    ? (period === 'week' ? 'Senaste 7 dagarna' : 'Senaste 30 dagarna')
+    : (period === 'week' ? 'Last 7 Days' : 'Last 30 Days');
+  const sv = lang === 'sv';
+
+  const titleEl = document.getElementById('report-title');
+  if (titleEl) titleEl.textContent = sv
+    ? (period === 'week' ? 'Veckovis s\u00e5rbarhetsrapport' : 'M\u00e5natlig s\u00e5rbarhetsrapport')
+    : (period === 'week' ? 'Weekly Vulnerability Report' : 'Monthly Vulnerability Report');
+
+  const summaryTitle = document.getElementById('summary-title');
+  if (summaryTitle) summaryTitle.textContent = sv ? 'Sammanfattning f\u00f6r ' + periodLabel.toLowerCase() : periodLabel + ' Summary';
+
+  const totalLabel = document.getElementById('stat-total-label');
+  if (totalLabel) totalLabel.textContent = sv ? 'Nya publicerade s\u00e5rbarheter' : 'New vulnerabilities published';
+
+  const critLabel = document.getElementById('stat-critical-label');
+  if (critLabel) critLabel.textContent = sv ? 'Kritiska s\u00e5rbarheter (CVSS \u2265 9)' : 'Critical vulnerabilities (CVSS \u2265 9)';
+
+  const vendorTitle = document.getElementById('vendor-title');
+  if (vendorTitle) vendorTitle.innerHTML = '<i data-feather="bar-chart-2" style="width:18px;height:18px;color:var(--accent-pink)"></i> ' +
+    (sv ? 'Mest drabbade leverant\u00f6rer (' + periodLabel + ')' : 'Most Targeted Vendors (' + periodLabel + ')');
+
+  const aiTitle = document.getElementById('ai-title');
+  if (aiTitle) aiTitle.innerHTML = '<i data-feather="cpu" style="width:18px;height:18px;color:var(--accent-pink)"></i> ' +
+    (sv ? 'AI-s\u00e4kerhetsanalys' : 'AI Security Analysis');
+
+  const nopatchTitle = document.getElementById('nopatch-title');
+  if (nopatchTitle) nopatchTitle.innerHTML = '<i data-feather="shield-off" style="width:18px;height:18px;color:var(--accent-pink)"></i> ' +
+    (sv ? 'CVSS 8+ \u2014 Ingen patch tillg\u00e4nglig (' + periodLabel + ')' : 'CVSS 8+ \u2014 No Patch Available (' + periodLabel + ')');
+
+  const patchedTitle = document.getElementById('patched-title');
+  if (patchedTitle) patchedTitle.innerHTML = '<i data-feather="check-circle" style="width:18px;height:18px;color:var(--accent-pink)"></i> ' +
+    (sv ? 'CVSS 9+ \u2014 Patch tillg\u00e4nglig (' + periodLabel + ')' : 'CVSS 9+ \u2014 Patch Available (' + periodLabel + ')');
+
+  // KEV title stays in English always
+  const kevTitle = document.getElementById('kev-title');
+  if (kevTitle) kevTitle.innerHTML = '<i data-feather="alert-octagon" style="width:18px;height:18px;color:var(--accent-pink)"></i> Known Exploited Vulnerabilities (KEV) \u2014 ' + periodLabel;
+
+  document.title = (titleEl ? titleEl.textContent : '') + (sv ? ' \u2014 S\u00e4kerhetsinstrumentpanel' : '');
+
+  if (window.feather) feather.replace();
 }
 
 // Visitor IP for footer
@@ -542,4 +705,5 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPdfExport();
   fetchVisitorIp();
   loadAiAnalysis();
+  setupLangToggle();
 });

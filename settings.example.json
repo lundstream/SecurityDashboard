@@ -81,5 +81,8 @@
     "maxTokens": 4000,
     "runOnBoot": 0
   },
-  "animatedBackground": true
+  "animatedBackground": true,
+  "tickerFeed": "https://feeds.feedburner.com/TheHackersNews",
+  "footerText": "\u00a9 2026 lundstream.net, all rights reserved.",
+  "showGithubLink": true
 }
