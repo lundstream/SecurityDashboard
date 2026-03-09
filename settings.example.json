@@ -74,5 +74,12 @@
       { "title": "Onetime secret - Send passwords etc.", "url": "https://onetimesecret.com/" }
     ]
   },
+  "ai": {
+    "enabled": false,
+    "githubToken": "",
+    "model": "gpt-4o-mini",
+    "maxTokens": 4000,
+    "runOnBoot": 0
+  },
   "animatedBackground": true
 }

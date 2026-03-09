@@ -11,6 +11,10 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      # GitHub token for AI analysis (GitHub Models API)
+      # - AI_GITHUB_TOKEN=ghp_your_token_here
+      # Set to 1 to trigger AI analysis on next container start
+      # - AI_RUN_ON_BOOT=0
 
 volumes:
   dashboard-data:

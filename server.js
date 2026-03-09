@@ -1144,6 +1144,203 @@ app.get('/api/tools/ports', async (req, res) => {
 });
 
 // =========================================================================
+//  AI ANALYSIS (GitHub Models API)
+// =========================================================================
+const aiConfig = settings.ai || {};
+// Allow environment variables to override settings (useful for Docker)
+if (process.env.AI_GITHUB_TOKEN) aiConfig.githubToken = process.env.AI_GITHUB_TOKEN;
+if (process.env.AI_RUN_ON_BOOT !== undefined) aiConfig.runOnBoot = Number(process.env.AI_RUN_ON_BOOT);
+
+function buildAiPrompt(period) {
+  const days = period === 'week' ? 7 : 30;
+  const periodLabel = period === 'week' ? 'Weekly (Last 7 Days)' : 'Monthly (Last 30 Days)';
+
+  const stats = db.getReportStats(days);
+  const topVendors = db.getTopVendorsWithBreakdown(days, 10);
+  const kevCves = db.getReportCves({ days, kevOnly: true }).map(simplify);
+  const critCves = db.getReportCves({ days, minCvss: 9, limit: 20 }).map(simplify);
+  const highNoPatch = db.getReportCves({ days, minCvss: 8, noPatchOnly: true, limit: 15 }).map(simplify);
+  const news = db.getRecentNews(days);
+
+  const vendorSummary = topVendors.map(v =>
+    `  ${v.vendor}: ${v.cnt} CVEs (critical:${v.critical||0}, high:${v.high||0}, KEV:${v.kev||0})`
+  ).join('\n');
+
+  const kevSummary = kevCves.slice(0, 15).map(c =>
+    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 120)}`
+  ).join('\n');
+
+  const critSummary = critCves.slice(0, 15).map(c =>
+    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 120)}`
+  ).join('\n');
+
+  const noPatchSummary = highNoPatch.slice(0, 10).map(c =>
+    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 120)}`
+  ).join('\n');
+
+  const newsSummary = news.slice(0, 25).map(n =>
+    `  [${n.source}] ${n.title}`
+  ).join('\n');
+
+  return `You are an IT security analyst. Provide a concise ${periodLabel} security analysis based on the data below.
+
+STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
+## Executive Summary
+A brief 2-3 sentence overview of the threat landscape this period.
+
+## Key Threats & Vulnerabilities
+Highlight the most critical CVEs, especially KEV entries and unpatched high-severity issues. Mention affected vendors and potential impact.
+
+## Vendor Risk Overview
+Analyze which vendors pose the highest risk based on CVE volume and severity.
+
+## Trending Security News
+Summarize the most important security news items and what they mean for organizations.
+
+## Recommendations
+Provide 3-5 actionable recommendations for IT security teams based on this data.
+
+Keep the total response under 800 words. Be specific and reference actual CVE IDs and vendor names from the data.
+
+--- DATA ---
+PERIOD: ${periodLabel}
+STATS: ${stats.total} total CVEs, ${stats.critical} critical (CVSS≥9), ${stats.kevCount} known exploited
+
+TOP VENDORS:
+${vendorSummary || '  No vendor data available'}
+
+KNOWN EXPLOITED VULNERABILITIES (KEV):
+${kevSummary || '  None in this period'}
+
+CRITICAL CVEs (CVSS 9+):
+${critSummary || '  None in this period'}
+
+HIGH SEVERITY WITHOUT PATCHES (CVSS 8+):
+${noPatchSummary || '  None in this period'}
+
+RECENT SECURITY NEWS:
+${newsSummary || '  No news available'}`;
+}
+
+async function runAiAnalysis(period) {
+  if (!aiConfig.enabled) {
+    console.log('[AI] Analysis disabled in settings');
+    return null;
+  }
+  if (!aiConfig.githubToken) {
+    console.log('[AI] No GitHub token configured — skipping analysis');
+    return null;
+  }
+
+  const prompt = buildAiPrompt(period);
+  const model = aiConfig.model || 'openai/gpt-4o-mini';
+  const maxTokens = aiConfig.maxTokens || 4000;
+
+  console.log(`[AI] Running ${period} analysis with model ${model}...`);
+
+  try {
+    const resp = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${aiConfig.githubToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a professional IT security analyst writing concise security reports. Use markdown formatting.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.3
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error(`[AI] API error ${resp.status}: ${errText}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    const analysis = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+
+    if (!analysis) {
+      console.error('[AI] No content in response');
+      return null;
+    }
+
+    db.saveAiAnalysis(period, analysis);
+    console.log(`[AI] ${period} analysis saved (${analysis.length} chars)`);
+    return analysis;
+  } catch (e) {
+    console.error('[AI] Analysis failed:', e.message);
+    return null;
+  }
+}
+
+// API: Get latest AI analysis
+app.get('/api/ai-analysis', (req, res) => {
+  const period = req.query.period === 'week' ? 'week' : 'month';
+  const result = db.getLatestAiAnalysis(period);
+  if (!result) return res.json({ analysis: null, generatedAt: null });
+  res.json({ analysis: result.analysis, generatedAt: result.generated_at });
+});
+
+// API: Manually trigger AI analysis
+app.post('/api/ai-analysis/trigger', (req, res) => {
+  const period = req.query.period === 'week' ? 'week' : 'month';
+  runAiAnalysis(period).then(analysis => {
+    if (analysis) res.json({ ok: true, period, length: analysis.length });
+    else res.json({ ok: false, error: 'Analysis failed or disabled — check server logs' });
+  }).catch(e => res.status(500).json({ ok: false, error: e.message }));
+});
+
+// Schedule AI analysis: Sunday 23:59 (weekly) and last day of month 23:59 (monthly)
+function scheduleAiAnalysis() {
+  function msUntilNext(targetHour, targetMin) {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(targetHour, targetMin, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    return next;
+  }
+
+  // Check every hour if it's time to run
+  setInterval(async () => {
+    const now = new Date();
+    const day = now.getDay(); // 0 = Sunday
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+
+    // Weekly: Sunday at 23:xx (run once during the 23:00 hour)
+    if (day === 0 && hour === 23 && minute < 60) {
+      const lastWeekly = db.getLatestAiAnalysis('week');
+      const today = now.toISOString().slice(0, 10);
+      if (!lastWeekly || !lastWeekly.generated_at || lastWeekly.generated_at.slice(0, 10) !== today) {
+        console.log('[AI] Scheduled weekly analysis starting...');
+        await runAiAnalysis('week');
+      }
+    }
+
+    // Monthly: last day of month at 23:xx
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isLastDay = tomorrow.getDate() === 1;
+    if (isLastDay && hour === 23 && minute < 60) {
+      const lastMonthly = db.getLatestAiAnalysis('month');
+      const today = now.toISOString().slice(0, 10);
+      if (!lastMonthly || !lastMonthly.generated_at || lastMonthly.generated_at.slice(0, 10) !== today) {
+        console.log('[AI] Scheduled monthly analysis starting...');
+        await runAiAnalysis('month');
+      }
+    }
+  }, 30 * 60 * 1000); // Check every 30 minutes
+
+  console.log('[AI] Analysis scheduled: weekly (Sunday 23:59), monthly (last day 23:59)');
+}
+
+// =========================================================================
 //  STARTUP & SCHEDULING
 // =========================================================================
 const PORT = settings.server.port || process.env.PORT || 3000;
@@ -1211,6 +1408,15 @@ const PORT = settings.server.port || process.env.PORT || 3000;
     console.log(`Next report scheduled at ${next.toISOString()}`);
   }
   scheduleDaily();
+
+  // AI analysis scheduling
+  scheduleAiAnalysis();
+
+  // Run AI analysis on boot if runOnBoot is set to 1
+  if (aiConfig.enabled && (aiConfig.runOnBoot === 1 || aiConfig.runOnBoot === true)) {
+    console.log('[AI] runOnBoot enabled — triggering analysis...');
+    runAiAnalysis('week').then(() => runAiAnalysis('month')).catch(e => console.error('[AI] Boot analysis error:', e.message));
+  }
 
   app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
 })();

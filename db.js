@@ -83,6 +83,16 @@ function initTables() {
       data TEXT NOT NULL
     )
   `);
+
+  // AI analysis reports
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS ai_analysis (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      period TEXT NOT NULL,
+      analysis TEXT NOT NULL,
+      generated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
 }
 
 // --- CVE helpers ---
@@ -334,6 +344,20 @@ function getVendorList(days) {
   return d.prepare(`SELECT vendor, COUNT(*) as cnt FROM cves WHERE published >= ? AND vendor IS NOT NULL AND vendor != '' GROUP BY vendor ORDER BY cnt DESC`).all(cutoff);
 }
 
+// --- AI analysis helpers ---
+function saveAiAnalysis(period, analysis) {
+  getDb().prepare(`INSERT INTO ai_analysis (period, analysis) VALUES (?, ?)`).run(period, analysis);
+}
+
+function getLatestAiAnalysis(period) {
+  return getDb().prepare(`SELECT analysis, generated_at FROM ai_analysis WHERE period = ? ORDER BY generated_at DESC LIMIT 1`).get(period) || null;
+}
+
+function getRecentNews(days) {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  return getDb().prepare(`SELECT title, source, pub_date as pubDate FROM news WHERE pub_date >= ? ORDER BY pub_date DESC LIMIT 50`).all(cutoff);
+}
+
 module.exports = {
   getDb,
   upsertCve, getCves, getCvesFiltered, getCveCount, purgeCves,
@@ -342,5 +366,6 @@ module.exports = {
   upsertCveDailyCount, getCveDailyCounts,
   upsertKev, getKevSet, getKevEntries, updateCveEnrichment,
   saveReport, getLatestReport, getReportCves, getReportStats, getTopVendors, getTopVendorsWithBreakdown, getVendorList,
+  saveAiAnalysis, getLatestAiAnalysis, getRecentNews,
   closeDb
 };

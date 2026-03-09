@@ -453,6 +453,69 @@ function setupPdfExport() {
   });
 }
 
+// Simple markdown to HTML (handles ##, **, `, ul, ol, p)
+function mdToHtml(md) {
+  if (!md) return '';
+  const lines = md.split('\n');
+  let html = '';
+  let inUl = false, inOl = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Close lists if not a list item
+    if (inUl && !trimmed.startsWith('- ') && !trimmed.startsWith('* ')) { html += '</ul>'; inUl = false; }
+    if (inOl && !/^\d+[\.\)] /.test(trimmed)) { html += '</ol>'; inOl = false; }
+
+    if (trimmed.startsWith('## ')) {
+      html += '<h2>' + escapeHtml(trimmed.slice(3)) + '</h2>';
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += '<li>' + inlineMd(trimmed.slice(2)) + '</li>';
+    } else if (/^\d+[\.\)] /.test(trimmed)) {
+      if (!inOl) { html += '<ol>'; inOl = true; }
+      html += '<li>' + inlineMd(trimmed.replace(/^\d+[\.\)] /, '')) + '</li>';
+    } else if (trimmed === '') {
+      // skip empty lines
+    } else {
+      html += '<p>' + inlineMd(trimmed) + '</p>';
+    }
+  }
+  if (inUl) html += '</ul>';
+  if (inOl) html += '</ol>';
+  return html;
+}
+
+function inlineMd(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/`(.+?)`/g, '<code>$1</code>');
+  s = s.replace(/\b(CVE-\d{4}-\d{4,})\b/g, '<a href="https://nvd.nist.gov/vuln/detail/$1" target="_blank" rel="noopener">$1</a>');
+  return s;
+}
+
+// Fetch and render AI analysis
+async function loadAiAnalysis() {
+  const params = new URLSearchParams(window.location.search);
+  const period = params.get('period') === 'week' ? 'week' : 'month';
+  const contentEl = document.getElementById('ai-content');
+  const metaEl = document.getElementById('ai-meta');
+  const genEl = document.getElementById('ai-generated-at');
+
+  try {
+    const data = await fetchJSON('/api/ai-analysis?period=' + period);
+    if (data.analysis) {
+      contentEl.innerHTML = mdToHtml(data.analysis);
+      if (data.generatedAt && genEl) {
+        genEl.textContent = new Date(data.generatedAt).toLocaleString();
+        metaEl.style.display = 'block';
+      }
+    } else {
+      contentEl.innerHTML = '<span style="color:var(--muted)">No AI analysis available yet. Analysis runs automatically on Sunday nights (weekly) and end of month (monthly).</span>';
+    }
+  } catch (e) {
+    contentEl.innerHTML = '<span style="color:var(--muted)">Could not load AI analysis.</span>';
+  }
+}
+
 // Visitor IP for footer
 async function fetchVisitorIp(retries) {
   retries = retries || 0;
@@ -478,4 +541,5 @@ document.addEventListener('DOMContentLoaded', () => {
   setupVendorFilter();
   setupPdfExport();
   fetchVisitorIp();
+  loadAiAnalysis();
 });
