@@ -266,16 +266,16 @@ async function loadReport() {
   if (kevLabel) kevLabel.textContent = 'Known exploited vulnerabilities (KEV)';
 
   const vendorTitle = document.getElementById('vendor-title');
-  if (vendorTitle) vendorTitle.innerHTML = '<i data-feather="bar-chart-2" style="width:18px;height:18px"></i> Most Targeted Vendors (' + periodLabel + ')';
+  if (vendorTitle) vendorTitle.innerHTML = '<i data-feather="bar-chart-2" style="width:18px;height:18px;color:var(--accent-pink)"></i> Most Targeted Vendors (' + periodLabel + ')';
 
   const kevTitle = document.getElementById('kev-title');
-  if (kevTitle) kevTitle.innerHTML = '<i data-feather="alert-octagon" style="width:18px;height:18px"></i> Known Exploited Vulnerabilities (KEV) \u2014 ' + periodLabel;
+  if (kevTitle) kevTitle.innerHTML = '<i data-feather="alert-octagon" style="width:18px;height:18px;color:var(--accent-pink)"></i> Known Exploited Vulnerabilities (KEV) \u2014 ' + periodLabel;
 
   const nopatchTitle = document.getElementById('nopatch-title');
-  if (nopatchTitle) nopatchTitle.innerHTML = '<i data-feather="shield-off" style="width:18px;height:18px"></i> CVSS 8+ \u2014 No Patch Available (' + periodLabel + ')';
+  if (nopatchTitle) nopatchTitle.innerHTML = '<i data-feather="shield-off" style="width:18px;height:18px;color:var(--accent-pink)"></i> CVSS 8+ \u2014 No Patch Available (' + periodLabel + ')';
 
   const patchedTitle = document.getElementById('patched-title');
-  if (patchedTitle) patchedTitle.innerHTML = '<i data-feather="check-circle" style="width:18px;height:18px"></i> CVSS 9+ \u2014 Patch Available (' + periodLabel + ')';
+  if (patchedTitle) patchedTitle.innerHTML = '<i data-feather="check-circle" style="width:18px;height:18px;color:var(--accent-pink)"></i> CVSS 9+ \u2014 Patch Available (' + periodLabel + ')';
 
   try {
     let url = '/api/report?period=' + period;
