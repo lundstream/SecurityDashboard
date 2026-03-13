@@ -17,6 +17,8 @@ services:
       - AI_RUN_ON_BOOT=${AI_RUN_ON_BOOT:-0}
       # NVD token for CVE fetching (NVD API)
       - NVD_API_KEY=${NVD_API_KEY}
+      # HaveIBeenPwned API key for e-mail searches (HIBP API)
+      - HIBP_API_KEY=${HIBP_API_KEY}
 
 volumes:
   dashboard-data:

@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Vulnerability Report</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238400ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
@@ -163,7 +164,7 @@
   <script>if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light-theme');</script>
   <header>
     <div style="display:flex;align-items:center;gap:10px">
-      <a href="/" style="text-decoration:none"><div class="logo"><i data-feather="cloud" style="vertical-align:middle"></i></div></a>
+      <a href="/" style="text-decoration:none"><div class="logo"><i data-feather="shield" style="vertical-align:middle"></i></div></a>
       <a href="/" style="text-decoration:none"><div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div></a>
     </div>
     <div style="display:flex;align-items:center;gap:12px">
@@ -192,6 +193,7 @@
           <div class="vendor-filter-list" id="vendor-list"></div>
         </div>
         <span id="vendor-tag"></span>
+        <button id="vendor-save-default" style="display:none;font-size:0.78em;padding:4px 10px;border-radius:999px;background:var(--accent-purple);color:#fff;border:none;cursor:pointer;font-weight:600">Set as Default</button>
       </div>
 
       <!-- Summary stats -->
@@ -309,18 +311,18 @@
         document.body.style.backgroundAttachment = 'fixed';
         return;
       }
-      if(localStorage.getItem('animOff')==='1'){
+      if(localStorage.getItem('animOn')==='1'){
+        startAnimation();
+      } else {
         cv.style.display = 'none';
         document.body.style.background = 'linear-gradient(135deg, #0f0620 0%, #2c0038 40%, #1b0033 60%)';
         document.body.style.backgroundAttachment = 'fixed';
-      } else {
-        startAnimation();
       }
       var btn = document.getElementById('anim-toggle');
       if(btn) btn.addEventListener('click', function(){
-        var off = localStorage.getItem('animOff')==='1';
-        if(off){ localStorage.removeItem('animOff'); location.reload(); }
-        else { localStorage.setItem('animOff','1'); location.reload(); }
+        var on = localStorage.getItem('animOn')==='1';
+        if(on){ localStorage.removeItem('animOn'); location.reload(); }
+        else { localStorage.setItem('animOn','1'); location.reload(); }
       });
     }).catch(function(){ startAnimation(); });
     function startAnimation(){

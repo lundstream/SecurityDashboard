@@ -202,7 +202,15 @@ async function fetchPublicSettings() {
 let selectedVendors = [];
 let currentPeriod = 'month';
 let allVendors = [];
-let currentAiLang = 'en';
+let currentAiLang = localStorage.getItem('reportLang') || 'en';
+
+// Load saved default vendor filter from localStorage
+(function loadDefaultVendors() {
+  try {
+    const saved = localStorage.getItem('reportDefaultVendors');
+    if (saved) selectedVendors = JSON.parse(saved);
+  } catch (e) {}
+})();
 
 async function setupVendorFilter() {
   const input = document.getElementById('vendor-search');
@@ -210,7 +218,7 @@ async function setupVendorFilter() {
   const tagEl = document.getElementById('vendor-tag');
   if (!input || !listEl) return;
 
-  const days = currentPeriod === 'week' ? 7 : 30;
+  const days = currentPeriod === 'week' ? 7 : currentPeriod === 'yesterday' ? 1 : 30;
   try { allVendors = await fetchJSON('/api/vendors?days=' + days); } catch(e) { allVendors = []; }
 
   function renderTags() {
@@ -254,19 +262,70 @@ async function setupVendorFilter() {
     renderList('');
     loadReport();
   });
+
+  // Save / Clear default vendor filter buttons
+  const defaultBtn = document.getElementById('vendor-save-default');
+  if (defaultBtn) {
+    function updateDefaultBtn() {
+      const savedRaw = localStorage.getItem('reportDefaultVendors');
+      const savedVendors = savedRaw ? JSON.parse(savedRaw) : [];
+      const currentSorted = [...selectedVendors].sort();
+      const savedSorted = [...savedVendors].sort();
+      const matchesSaved = savedVendors.length > 0 && currentSorted.length === savedSorted.length && currentSorted.every((v, i) => v === savedSorted[i]);
+      if (matchesSaved) {
+        defaultBtn.textContent = 'Clear Default';
+        defaultBtn.title = 'Remove saved default vendor filter';
+        defaultBtn.style.display = 'inline-block';
+        defaultBtn.onclick = () => {
+          localStorage.removeItem('reportDefaultVendors');
+          selectedVendors = [];
+          renderTags();
+          loadReport();
+        };
+      } else if (selectedVendors.length > 0) {
+        defaultBtn.textContent = 'Set as Default';
+        defaultBtn.title = 'Save current vendor filter as default';
+        defaultBtn.style.display = 'inline-block';
+        defaultBtn.onclick = () => {
+          localStorage.setItem('reportDefaultVendors', JSON.stringify(selectedVendors));
+          updateDefaultBtn();
+        };
+      } else if (savedVendors.length > 0) {
+        defaultBtn.textContent = 'Clear Default';
+        defaultBtn.title = 'Remove saved default vendor filter';
+        defaultBtn.style.display = 'inline-block';
+        defaultBtn.onclick = () => {
+          localStorage.removeItem('reportDefaultVendors');
+          selectedVendors = [];
+          renderTags();
+          loadReport();
+        };
+      } else {
+        defaultBtn.style.display = 'none';
+      }
+    }
+    // Patch renderTags to also update the default button
+    const origRenderTags = renderTags;
+    renderTags = function() { origRenderTags(); updateDefaultBtn(); };
+    updateDefaultBtn();
+  }
+
+  // Render initial tags (from saved defaults)
+  renderTags();
 }
 
 async function loadReport() {
   const params = new URLSearchParams(window.location.search);
-  const period = params.get('period') === 'week' ? 'week' : 'month';
+  const p = params.get('period');
+  const period = p === 'week' ? 'week' : p === 'yesterday' ? 'yesterday' : 'month';
   currentPeriod = period;
-  const days = period === 'week' ? 7 : 30;
-  const periodLabel = period === 'week' ? 'Last 7 Days' : 'Last 30 Days';
+  const days = period === 'week' ? 7 : period === 'yesterday' ? 1 : 30;
+  const periodLabel = period === 'week' ? 'Last 7 Days' : period === 'yesterday' ? 'Yesterday' : 'Last 30 Days';
 
   // Update page title and section headings
   const titleEl = document.getElementById('report-title');
-  if (titleEl) titleEl.textContent = period === 'week' ? 'Weekly Vulnerability Report' : 'Monthly Vulnerability Report';
-  document.title = (period === 'week' ? 'Weekly' : 'Monthly') + ' Vulnerability Report';
+  if (titleEl) titleEl.textContent = period === 'week' ? 'Weekly Vulnerability Report' : period === 'yesterday' ? 'Yesterday\'s Vulnerability Report' : 'Monthly Vulnerability Report';
+  document.title = (period === 'week' ? 'Weekly' : period === 'yesterday' ? 'Yesterday\'s' : 'Monthly') + ' Vulnerability Report';
 
   const summaryTitle = document.getElementById('summary-title');
   if (summaryTitle) summaryTitle.textContent = periodLabel + ' Summary';
@@ -590,7 +649,8 @@ function inlineMd(text) {
 async function loadAiAnalysis(lang) {
   lang = lang || currentAiLang || 'en';
   const params = new URLSearchParams(window.location.search);
-  const period = params.get('period') === 'week' ? 'week' : 'month';
+  const p = params.get('period');
+  const period = p === 'week' ? 'week' : p === 'yesterday' ? 'yesterday' : 'month';
   const contentEl = document.getElementById('ai-content');
   const metaEl = document.getElementById('ai-meta');
   const genEl = document.getElementById('ai-generated-at');
@@ -605,7 +665,7 @@ async function loadAiAnalysis(lang) {
       }
     } else {
       contentEl.innerHTML = '<span style="color:var(--muted)">' +
-        (lang === 'sv' ? 'Ingen AI-analys tillg\u00e4nglig \u00e4nnu.' : 'No AI analysis available yet. Analysis runs automatically on Sunday nights (weekly) and end of month (monthly).') +
+        (lang === 'sv' ? 'Ingen AI-analys tillg\u00e4nglig \u00e4nnu.' : 'No AI analysis available yet. Analysis runs automatically daily (06:00), Sunday nights (weekly) and end of month (monthly).') +
         '</span>';
     }
   } catch (e) {
@@ -626,6 +686,7 @@ function setupLangToggle() {
   updateLabel();
   btn.addEventListener('click', () => {
     currentAiLang = currentAiLang === 'en' ? 'sv' : 'en';
+    localStorage.setItem('reportLang', currentAiLang);
     updateLabel();
     loadAiAnalysis(currentAiLang);
     translateHeadings(currentAiLang);
@@ -634,16 +695,17 @@ function setupLangToggle() {
 
 function translateHeadings(lang) {
   const params = new URLSearchParams(window.location.search);
-  const period = params.get('period') === 'week' ? 'week' : 'month';
+  const p = params.get('period');
+  const period = p === 'week' ? 'week' : p === 'yesterday' ? 'yesterday' : 'month';
   const periodLabel = lang === 'sv'
-    ? (period === 'week' ? 'Senaste 7 dagarna' : 'Senaste 30 dagarna')
-    : (period === 'week' ? 'Last 7 Days' : 'Last 30 Days');
+    ? (period === 'week' ? 'Senaste 7 dagarna' : period === 'yesterday' ? 'Ig\u00e5r' : 'Senaste 30 dagarna')
+    : (period === 'week' ? 'Last 7 Days' : period === 'yesterday' ? 'Yesterday' : 'Last 30 Days');
   const sv = lang === 'sv';
 
   const titleEl = document.getElementById('report-title');
   if (titleEl) titleEl.textContent = sv
-    ? (period === 'week' ? 'Veckovis s\u00e5rbarhetsrapport' : 'M\u00e5natlig s\u00e5rbarhetsrapport')
-    : (period === 'week' ? 'Weekly Vulnerability Report' : 'Monthly Vulnerability Report');
+    ? (period === 'week' ? 'Veckovis s\u00e5rbarhetsrapport' : period === 'yesterday' ? 'G\u00e5rdagens s\u00e5rbarhetsrapport' : 'M\u00e5natlig s\u00e5rbarhetsrapport')
+    : (period === 'week' ? 'Weekly Vulnerability Report' : period === 'yesterday' ? 'Yesterday\'s Vulnerability Report' : 'Monthly Vulnerability Report');
 
   const summaryTitle = document.getElementById('summary-title');
   if (summaryTitle) summaryTitle.textContent = sv ? 'Sammanfattning f\u00f6r ' + periodLabel.toLowerCase() : periodLabel + ' Summary';
@@ -704,6 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupVendorFilter();
   setupPdfExport();
   fetchVisitorIp();
-  loadAiAnalysis();
+  loadAiAnalysis(currentAiLang);
   setupLangToggle();
+  if (currentAiLang !== 'en') translateHeadings(currentAiLang);
 });

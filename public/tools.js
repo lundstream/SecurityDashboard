@@ -79,6 +79,10 @@ async function fetchPublicSettings() {
       const logoEl = document.querySelector('.logo');
       if (logoEl) logoEl.innerHTML = '<img src="' + escapeHtml(res.logo) + '" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px">';
     }
+    if (res.hibpEnabled === false) {
+      const card = document.getElementById('tool-email-breach');
+      if (card) card.style.display = 'none';
+    }
   } catch (e) {}
 }
 
@@ -359,6 +363,52 @@ function setupPasswordTool() {
   input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 }
 
+// =========================================================================
+//  7. EMAIL BREACH CHECK (HIBP — proxied through server)
+// =========================================================================
+function setupEmailBreachTool() {
+  const btn = document.getElementById('email-breach-btn');
+  const input = document.getElementById('email-breach-input');
+  if (!btn || !input) return;
+  btn.dataset.label = 'Check';
+
+  async function run() {
+    const email = input.value.trim();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showResult('email-breach-result', '<span class="bad">Please enter a valid email address.</span>');
+      return;
+    }
+    setLoading('email-breach-btn', true);
+    try {
+      const data = await fetchJSON('/api/tools/email-breach?email=' + encodeURIComponent(email));
+      let html = '<span class="label">Breach Check: ' + escapeHtml(email) + '</span>\n\n';
+      if (data.error) {
+        html += '<span class="bad">' + escapeHtml(data.error) + '</span>\n';
+      } else if (data.breaches && data.breaches.length > 0) {
+        html += '<span class="bad">⚠ Found in ' + data.breaches.length + ' breach(es)</span>\n\n';
+        for (const b of data.breaches) {
+          html += '<span class="label">' + escapeHtml(b.Name || b.name || 'Unknown') + '</span>';
+          if (b.BreachDate || b.breachDate) html += '  <span class="muted">(' + escapeHtml(b.BreachDate || b.breachDate) + ')</span>';
+          html += '\n';
+          if (b.Domain || b.domain) html += '  Domain: ' + escapeHtml(b.Domain || b.domain) + '\n';
+          if (b.DataClasses || b.dataClasses) html += '  Data: ' + (b.DataClasses || b.dataClasses).map(d => escapeHtml(d)).join(', ') + '\n';
+          html += '\n';
+        }
+      } else {
+        html += '<span class="ok">✓ Not found in any known breaches</span>\n\n';
+        html += '<span class="muted">This email was not found in the Have I Been Pwned database.</span>\n';
+      }
+      showResult('email-breach-result', html);
+    } catch (e) {
+      showResult('email-breach-result', '<span class="bad">Error: ' + escapeHtml(e.message) + '</span>');
+    }
+    setLoading('email-breach-btn', false);
+  }
+  btn.addEventListener('click', run);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+}
+
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
   setupThemeToggle();
@@ -370,4 +420,5 @@ document.addEventListener('DOMContentLoaded', () => {
   setupIpTool();
   setupPortsTool();
   setupPasswordTool();
+  setupEmailBreachTool();
 });

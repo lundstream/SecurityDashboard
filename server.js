@@ -15,7 +15,7 @@ app.use(cors());
 
 // Security headers
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://flagcdn.com; connect-src 'self'; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://flagcdn.com; connect-src 'self' https://api.pwnedpasswords.com; frame-ancestors 'none'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
@@ -240,7 +240,8 @@ async function backfillCvesFromNvd() {
           if (!id) continue;
           const pubRaw = cve.published || cve.datePublished || null;
           const pub = pubRaw ? new Date(pubRaw) : null;
-          db.upsertCve(id, cve, pub && !isNaN(pub.getTime()) ? pub.toISOString() : null, extractCvssScore(cve));
+          const enrichment = enrichCveItem(id, cve);
+          db.upsertCve(id, cve, pub && !isNaN(pub.getTime()) ? pub.toISOString() : null, extractCvssScore(cve), enrichment);
         }
         fetched += vulns.length;
         console.log(`    Page ${pageIndex + 1}: ${vulns.length} CVEs (${fetched}/${totalResults})`);
@@ -532,7 +533,20 @@ function enrichCveItem(id, item) {
       'productsecurity','product-cve','csirt','cert-in','certcc','sirt','prodsec',
       'secalert','secalert_us','responsibledisclosure','vulnreport','reachout',
       'contact','info','support','nvd','nist','zdi-disclosures','cvd','n/a',
-      'openclaw','open-emr','oretnom23','fabian','iletisim','gfi','nsasoft'
+      'openclaw','open-emr','oretnom23','fabian','iletisim','gfi','nsasoft',
+      // Known CNAs (CVE Numbering Authorities) — not actual software vendors
+      'vulncheck','patchstack','wordfence','hackerone','rapid7','snyk','tenable',
+      'trendmicro','qualys','checkmarx','sonatype','portswigger','acunetix',
+      'beyondtrust','securin','appcheck','vdiscover','idefense','flexera',
+      'veracode','mend','whitesource','incibe','jpcert','kcirt','krcert',
+      'mitre','github',
+      // Common English stopwords that leak through as vendor names
+      'the','this','that','shared','progress','with','from','for','and',
+      'not','was','has','had','are','were','been','being','have','does',
+      'its','all','any','each','every','some','other','another','such',
+      'cross-site','improper','missing','multiple','remote','local','use',
+      'sql','buffer','stack','heap','integer','null','type','path','file',
+      'server','client','user','admin','system','network','web','application'
     ]);
     function isValidVendor(v) {
       if (!v || v.length <= 2 || v.length > 30) return false;
@@ -567,6 +581,29 @@ function enrichCveItem(id, item) {
         }
       }
     }
+    // CSAF format: extract vendor from product_tree CPE helpers
+    if (!enrichment.vendor && item.product_tree && item.product_tree.branches) {
+      csafOuter:
+      for (const branch of item.product_tree.branches) {
+        const stack = [branch];
+        while (stack.length) {
+          const node = stack.pop();
+          const cpe = node.product && node.product.product_identification_helper && node.product.product_identification_helper.cpe;
+          if (cpe) {
+            const parts = cpe.replace('cpe:/', 'cpe:2.3:').split(':');
+            if (parts.length > 3 && parts[3] && parts[3] !== '*' && isValidVendor(parts[3])) {
+              enrichment.vendor = parts[3];
+              break csafOuter;
+            }
+          }
+          if (Array.isArray(node.branches)) {
+            for (const child of node.branches) stack.push(child);
+          }
+        }
+      }
+    }
+    // (Removed unreliable email-domain and description-pattern vendor extraction;
+    //  only structured API data from affected[], CPE configs, and CSAF product_tree is used.)
   } catch (e) {}
 
   // Exploit and Patch detection from references
@@ -603,7 +640,8 @@ function enrichCveItem(id, item) {
 // Enrich all existing CVEs missing enrichment data
 function enrichExistingCves() {
   const d = db.getDb();
-  const rows = d.prepare(`SELECT id, data FROM cves WHERE vendor IS NULL OR vendor = '' OR discovered IS NULL LIMIT 5000`).all();
+  // Re-enrich ALL CVEs so updated blocklist/logic clears stale vendor values
+  const rows = d.prepare(`SELECT id, data FROM cves LIMIT 10000`).all();
   if (rows.length === 0) return;
   let enriched = 0;
   const kevSet = db.getKevSet();
@@ -611,12 +649,54 @@ function enrichExistingCves() {
     try {
       const item = JSON.parse(row.data);
       const e = enrichCveItem(row.id, item);
-      if (kevSet.has(row.id)) e.kev = true;
+      if (kevSet.has(row.id)) {
+        e.kev = true;
+        e.has_exploit = true; // KEV = known exploited
+      }
+      // Explicitly set vendor to '' when enrichment produces nothing,
+      // so stale bad values get cleared
+      if (!e.vendor) e.vendor = '';
       db.updateCveEnrichment(row.id, e);
       enriched++;
     } catch (err) {}
   }
   console.log(`Enriched ${enriched}/${rows.length} CVEs with metadata`);
+}
+
+// Fetch vendor/product from CIRCL CVE 5.0 API for CVEs missing vendor data.
+// NVD v2 responses often lack the affected[] array, but CIRCL has it.
+async function enrichVendorsFromCircl() {
+  const d = db.getDb();
+  const rows = d.prepare("SELECT id FROM cves WHERE (vendor IS NULL OR vendor = '') AND id LIKE 'CVE-%' ORDER BY published DESC LIMIT 2000").all();
+  if (rows.length === 0) { console.log('CIRCL vendor enrichment: all CVEs have vendors'); return; }
+  console.log(`CIRCL vendor enrichment: ${rows.length} CVEs missing vendor, fetching from CIRCL...`);
+  let filled = 0;
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(async (row) => {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        const r = await fetch(`${settings.cve.circlCveUrl}/${row.id}`, { signal: controller.signal });
+        clearTimeout(timer);
+        if (!r.ok) return null;
+        const data = await r.json();
+        const e = enrichCveItem(row.id, data);
+        if (e.vendor) {
+          db.updateCveEnrichment(row.id, { vendor: e.vendor });
+          // Also update stored data with richer CIRCL payload so future enrichments work
+          d.prepare('UPDATE cves SET data = ? WHERE id = ?').run(JSON.stringify(data), row.id);
+          return e.vendor;
+        }
+      } catch (err) {}
+      return null;
+    }));
+    filled += results.filter(r => r.status === 'fulfilled' && r.value).length;
+    // Rate limit: ~1 second pause between batches
+    if (i + BATCH_SIZE < rows.length) await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  console.log(`CIRCL vendor enrichment: filled vendor for ${filled}/${rows.length} CVEs`);
 }
 
 // =========================================================================
@@ -651,7 +731,7 @@ function simplify(item) {
     kev: item._kev || 0,
     exploit: item._exploit || 0,
     patch: item._patch || 0,
-    published: extractItemDate(item) ? extractItemDate(item).toISOString() : null,
+    published: extractItemDate(item) ? extractItemDate(item).toISOString() : (item._published || null),
     discovered: item._discovered || null,
     summary: extractSummary(item) || ''
   };
@@ -709,6 +789,19 @@ app.get('/api/cves', (req, res) => {
   res.json(cves);
 });
 
+// Search CVEs in database
+app.get('/api/cves/search', (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json([]);
+  const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
+  try {
+    const results = db.searchCves(q, limit);
+    res.json(results);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Load more CVEs — if DB has no more, fetch fresh from source
 app.get('/api/cves/more', async (req, res) => {
   const count = Math.min(parseInt(req.query.count || '50', 10), 200);
@@ -727,7 +820,8 @@ app.get('/api/cves/more', async (req, res) => {
         const id = extractItemId(it);
         if (!id) continue;
         const d = extractItemDate(it);
-        db.upsertCve(id, it, d ? d.toISOString() : null, extractCvssScore(it));
+        const enrichment = enrichCveItem(id, it);
+        db.upsertCve(id, it, d ? d.toISOString() : null, extractCvssScore(it), enrichment);
       }
       cves = db.getCves(count, offset);
     } catch (e) {
@@ -751,6 +845,19 @@ app.get('/api/rss', (req, res) => {
   const sources = sourceParam ? sourceParam.split(',').map(s => s.trim()).filter(Boolean) : [];
   const news = db.getNews(count, offset, sources.length > 0 ? sources : undefined);
   res.json(news);
+});
+
+// Search news in database
+app.get('/api/rss/search', (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json([]);
+  const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
+  try {
+    const results = db.searchNews(q, limit);
+    res.json(results);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Load more news — if DB has no more, fetch fresh from source
@@ -914,7 +1021,8 @@ app.get('/api/settings/public', (req, res) => {
     animatedBackground: settings.animatedBackground !== false,
     tickerFeed: settings.tickerFeed || '',
     footerText: settings.footerText || '\u00a9 2026 lundstream.net, all rights reserved.',
-    showGithubLink: settings.showGithubLink !== false
+    showGithubLink: settings.showGithubLink !== false,
+    hibpEnabled: !!(settings.hibpApiKey || process.env.HIBP_API_KEY || '').trim()
   });
 });
 
@@ -944,8 +1052,9 @@ app.get('/api/ticker', async (req, res) => {
 // Report data (supports ?period=week or ?period=month, ?vendor=name)
 app.get('/api/report', (req, res) => {
   try {
-    const period = req.query.period === 'week' ? 'week' : 'month';
-    const days = period === 'week' ? 7 : 30;
+    const p = req.query.period;
+    const period = p === 'week' ? 'week' : p === 'yesterday' ? 'yesterday' : 'month';
+    const days = period === 'week' ? 7 : period === 'yesterday' ? 1 : 30;
     const vendorParam = req.query.vendor || null;
     const vendor = vendorParam ? vendorParam.split(',').map(v => v.trim()).filter(Boolean) : null;
     const stats = db.getReportStats(days, vendor);
@@ -1169,6 +1278,40 @@ app.get('/api/tools/ports', async (req, res) => {
   }
 });
 
+// 6. Email Breach Check (HIBP v3 API — requires hibpApiKey in settings)
+app.get('/api/tools/email-breach', async (req, res) => {
+  const email = (req.query.email || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Valid email parameter required' });
+  }
+  const apiKey = (settings.hibpApiKey || process.env.HIBP_API_KEY || '').trim();
+  if (!apiKey) {
+    return res.status(503).json({ error: 'HIBP API key not configured. Add "hibpApiKey" to settings.json.' });
+  }
+  try {
+    const resp = await fetch('https://haveibeenpwned.com/api/v3/breachedaccount/' + encodeURIComponent(email) + '?truncateResponse=false', {
+      headers: {
+        'hibp-api-key': apiKey,
+        'User-Agent': 'SecurityDashboard'
+      },
+      timeout: 10000
+    });
+    if (resp.status === 404) {
+      return res.json({ breaches: [] });
+    }
+    if (resp.status === 429) {
+      return res.status(429).json({ error: 'Rate limited by HIBP. Please wait and try again.' });
+    }
+    if (!resp.ok) {
+      throw new Error('HIBP API error ' + resp.status);
+    }
+    const breaches = await resp.json();
+    res.json({ breaches: Array.isArray(breaches) ? breaches : [] });
+  } catch (e) {
+    res.status(502).json({ error: 'Lookup failed: ' + (e.message || 'Unknown error') });
+  }
+});
+
 // =========================================================================
 //  AI ANALYSIS (GitHub Models API)
 // =========================================================================
@@ -1182,8 +1325,8 @@ if (process.env.AI_RUN_ON_BOOT !== undefined) aiConfig.runOnBoot = Number(proces
 
 function buildAiPrompt(period, language) {
   language = language || 'en';
-  const days = period === 'week' ? 7 : 30;
-  const periodLabel = period === 'week' ? 'Weekly (Last 7 Days)' : 'Monthly (Last 30 Days)';
+  const days = period === 'week' ? 7 : period === 'yesterday' ? 1 : 30;
+  const periodLabel = period === 'week' ? 'Weekly (Last 7 Days)' : period === 'yesterday' ? 'Daily (Yesterday)' : 'Monthly (Last 30 Days)';
 
   const stats = db.getReportStats(days);
   const topVendors = db.getTopVendorsWithBreakdown(days, 10);
@@ -1272,7 +1415,7 @@ async function runAiAnalysis(period, language) {
   }
 
   const prompt = buildAiPrompt(period, language);
-  const model = aiConfig.model || 'openai/gpt-4o-mini';
+  const model = aiConfig.model || 'gpt-4o-mini';
   const maxTokens = aiConfig.maxTokens || 4000;
 
   console.log(`[AI] Running ${period} analysis (${language}) with model ${model}...`);
@@ -1328,7 +1471,8 @@ async function runAiAnalysisBothLanguages(period) {
 
 // API: Get latest AI analysis
 app.get('/api/ai-analysis', (req, res) => {
-  const period = req.query.period === 'week' ? 'week' : 'month';
+  const p = req.query.period;
+  const period = p === 'week' ? 'week' : p === 'yesterday' ? 'yesterday' : 'month';
   const language = req.query.lang === 'sv' ? 'sv' : 'en';
   const result = db.getLatestAiAnalysis(period, language);
   if (!result) return res.json({ analysis: null, generatedAt: null });
@@ -1337,7 +1481,8 @@ app.get('/api/ai-analysis', (req, res) => {
 
 // API: Manually trigger AI analysis
 app.post('/api/ai-analysis/trigger', (req, res) => {
-  const period = req.query.period === 'week' ? 'week' : 'month';
+  const p = req.query.period;
+  const period = p === 'week' ? 'week' : p === 'yesterday' ? 'yesterday' : 'month';
   runAiAnalysisBothLanguages(period).then(result => {
     if (result.en || result.sv) res.json({ ok: true, period, en: !!(result.en), sv: !!(result.sv) });
     else res.json({ ok: false, error: 'Analysis failed or disabled — check server logs' });
@@ -1383,9 +1528,19 @@ function scheduleAiAnalysis() {
         await runAiAnalysisBothLanguages('month');
       }
     }
+
+    // Daily: every day at 6:xx for yesterday's analysis
+    if (hour === 6 && minute < 60) {
+      const lastDaily = db.getLatestAiAnalysis('yesterday', 'en');
+      const today = now.toISOString().slice(0, 10);
+      if (!lastDaily || !lastDaily.generated_at || lastDaily.generated_at.slice(0, 10) !== today) {
+        console.log('[AI] Scheduled daily (yesterday) analysis starting...');
+        await runAiAnalysisBothLanguages('yesterday');
+      }
+    }
   }, 30 * 60 * 1000); // Check every 30 minutes
 
-  console.log('[AI] Analysis scheduled: weekly (Sunday 23:59), monthly (last day 23:59)');
+  console.log('[AI] Analysis scheduled: daily (06:00), weekly (Sunday 23:59), monthly (last day 23:59)');
 }
 
 // =========================================================================
@@ -1410,6 +1565,9 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   // Enrich existing CVEs with vendor/exploit/patch metadata
   enrichExistingCves();
 
+  // Fetch vendor data from CIRCL for CVEs still missing vendor (runs in background)
+  enrichVendorsFromCircl().catch(e => console.error('enrichVendorsFromCircl error:', e && e.message));
+
   // Backfill CVEs from NVD if DB is sparse (rate-limited, runs in background)
   backfillCvesFromNvd().catch(e => console.error('backfillCves error:', e && e.message));
   console.log('Polling News...');
@@ -1430,7 +1588,10 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   setInterval(() => pollCloudflareAws().catch(() => {}), 60 * 1000);
 
   // Scheduled polls
-  setInterval(pollCves, settings.polling.cveIntervalMinutes * 60 * 1000);
+  setInterval(async () => {
+    await pollCves();
+    enrichVendorsFromCircl().catch(() => {});
+  }, settings.polling.cveIntervalMinutes * 60 * 1000);
   setInterval(pollNews, settings.polling.newsIntervalMinutes * 60 * 1000);
   setInterval(async () => {
     await checkServices();
@@ -1463,7 +1624,7 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   // Run AI analysis on boot if runOnBoot is set to 1
   if (aiConfig.enabled && (aiConfig.runOnBoot === 1 || aiConfig.runOnBoot === true)) {
     console.log('[AI] runOnBoot enabled — triggering analysis...');
-    runAiAnalysisBothLanguages('week').then(() => runAiAnalysisBothLanguages('month')).catch(e => console.error('[AI] Boot analysis error:', e.message));
+    runAiAnalysisBothLanguages('yesterday').then(() => runAiAnalysisBothLanguages('week')).then(() => runAiAnalysisBothLanguages('month')).catch(e => console.error('[AI] Boot analysis error:', e.message));
   }
 
   app.listen(PORT, () => console.log(`Server listening on ${PORT}`));

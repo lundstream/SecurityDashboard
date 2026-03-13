@@ -334,7 +334,7 @@ function renderCveItems(items) {
       const idUrl = (id.toUpperCase().startsWith('CVE-')) ? ('https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + encodeURIComponent(id)) : (id.toUpperCase().startsWith('GHSA-') ? ('https://github.com/advisories/' + encodeURIComponent(id)) : url);
       const safeId = escapeHtml(id);
       const safeTitle = escapeHtml(title && title !== id ? title : '');
-      headHtml = `<a href="${idUrl}" target="_blank" rel="noopener">${safeId}</a>` + (safeTitle ? (': ' + safeTitle) : '');
+      headHtml = `<a href="${idUrl}" target="_blank" rel="noopener">${safeId}${safeTitle ? ': ' + safeTitle : ''}</a>`;
     } else {
       headHtml = `<a href="${url}" target="_blank" rel="noopener">${escapeHtml(title)}</a>`;
     }
@@ -405,6 +405,7 @@ let newsOffset = 0;
 let _newsPreloaded = null;   // background-fetched next batch
 let _newsPreloading = false;
 let _newsSources = [];       // selected source URLs (empty = all)
+let _allNewsItems = [];      // all loaded news items for client-side keyword filtering
 
 let cvePageSize = 10;
 let cveOffset = 0;
@@ -464,9 +465,11 @@ async function loadNews(offsetArg) {
     } catch (e) { /* ignore fallback error */ }
   }
   if (offset === 0) {
-    container.innerHTML = renderNewsItems(news);
+    _allNewsItems = Array.isArray(news) ? [...news] : [];
+    container.innerHTML = renderNewsItems(_allNewsItems);
   } else {
-    container.innerHTML += renderNewsItems(news);
+    if (Array.isArray(news)) _allNewsItems = _allNewsItems.concat(news);
+    container.innerHTML = renderNewsItems(_allNewsItems);
   }
   newsOffset = offset + (Array.isArray(news) ? news.length : 0);
   if (btn) {
@@ -639,6 +642,86 @@ async function setupNewsSourceFilter() {
   closeMenu();
 }
 
+// --- News keyword filter ---
+function setupNewsKeywordFilter() {}
+
+// --- Section search bars ---
+function setupSectionSearch() {
+  const newsSearch = document.getElementById('news-section-search');
+  const cveSearch = document.getElementById('cve-section-search');
+  let newsDebounce, cveDebounce;
+
+  if (newsSearch) {
+    let newsSearchResults = [];
+    newsSearch.addEventListener('input', () => {
+      clearTimeout(newsDebounce);
+      newsDebounce = setTimeout(async () => {
+        const q = newsSearch.value.trim();
+        const container = document.getElementById('news-items');
+        const loadMoreBtn = document.getElementById('news-load-more');
+        if (!q) {
+          container.innerHTML = renderNewsItems(_allNewsItems);
+          if (loadMoreBtn) loadMoreBtn.style.display = '';
+          return;
+        }
+        try {
+          newsSearchResults = await fetchJSON('/api/rss/search?q=' + encodeURIComponent(q) + '&limit=50');
+        } catch (e) { newsSearchResults = []; }
+        if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+        const first10 = newsSearchResults.slice(0, 10);
+        let html = renderNewsItems(first10);
+        if (newsSearchResults.length > 10) {
+          html += '<div class="search-results-info" style="text-align:center;padding:8px 0"><button id="news-search-load-all" style="cursor:pointer">Load all ' + newsSearchResults.length + ' results</button></div>';
+        } else if (newsSearchResults.length > 0) {
+          html += '<div class="search-results-info" style="text-align:center;padding:6px 0;color:var(--muted);font-size:0.85em">' + newsSearchResults.length + ' result' + (newsSearchResults.length !== 1 ? 's' : '') + '</div>';
+        } else {
+          html = '<div style="color:var(--muted);padding:12px">No results found</div>';
+        }
+        container.innerHTML = html;
+        const loadAll = document.getElementById('news-search-load-all');
+        if (loadAll) loadAll.addEventListener('click', () => {
+          container.innerHTML = renderNewsItems(newsSearchResults) + '<div class="search-results-info" style="text-align:center;padding:6px 0;color:var(--muted);font-size:0.85em">' + newsSearchResults.length + ' results</div>';
+        });
+      }, 300);
+    });
+  }
+
+  if (cveSearch) {
+    let cveSearchResults = [];
+    cveSearch.addEventListener('input', () => {
+      clearTimeout(cveDebounce);
+      cveDebounce = setTimeout(async () => {
+        const q = cveSearch.value.trim();
+        const container = document.getElementById('cve-items');
+        const loadMoreBtn = document.getElementById('cve-load-more');
+        if (!q) {
+          container.innerHTML = renderCveItems(window._cves || []);
+          if (loadMoreBtn) loadMoreBtn.style.display = '';
+          return;
+        }
+        try {
+          cveSearchResults = await fetchJSON('/api/cves/search?q=' + encodeURIComponent(q) + '&limit=50');
+        } catch (e) { cveSearchResults = []; }
+        if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+        const first10 = cveSearchResults.slice(0, 10);
+        let html = renderCveItems(first10);
+        if (cveSearchResults.length > 10) {
+          html += '<div class="search-results-info" style="text-align:center;padding:8px 0"><button id="cve-search-load-all" style="cursor:pointer">Load all ' + cveSearchResults.length + ' results</button></div>';
+        } else if (cveSearchResults.length > 0) {
+          html += '<div class="search-results-info" style="text-align:center;padding:6px 0;color:var(--muted);font-size:0.85em">' + cveSearchResults.length + ' result' + (cveSearchResults.length !== 1 ? 's' : '') + '</div>';
+        } else {
+          html = '<div style="color:var(--muted);padding:12px">No results found</div>';
+        }
+        container.innerHTML = html;
+        const loadAll = document.getElementById('cve-search-load-all');
+        if (loadAll) loadAll.addEventListener('click', () => {
+          container.innerHTML = renderCveItems(cveSearchResults) + '<div class="search-results-info" style="text-align:center;padding:6px 0;color:var(--muted);font-size:0.85em">' + cveSearchResults.length + ' results</div>';
+        });
+      }, 300);
+    });
+  }
+}
+
 function init() {
   setupFooterObserver('news-list', 'news-load-more');
   setupFooterObserver('cve-list', 'cve-load-more');
@@ -654,6 +737,8 @@ function init() {
   setupReportDropdown();
   setupLinksDropdown();
   setupNewsSourceFilter();
+  setupNewsKeywordFilter();
+  setupSectionSearch();
   fetchVisitorIp();
   fetchPublicSettings();
   fetchAndRenderVendorDonut();
@@ -807,17 +892,30 @@ async function fetchAndRenderUptime(){
     const data = await fetchJSON('/api/uptime');
     const canvas = document.getElementById('uptime-canvas');
     if (!canvas) return;
-    if (!Array.isArray(data) || data.length === 0) {
-      const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); return;
+    // Build 24 hourly slots for the last 24 hours
+    const HOUR_MS = 60 * 60 * 1000;
+    const now = Date.now();
+    const slots = [];
+    for (let i = 23; i >= 0; i--) {
+      const slotStart = now - i * HOUR_MS;
+      const slotEnd = slotStart + HOUR_MS;
+      slots.push({ ts: slotStart, end: slotEnd, ok: null });
     }
-    // limit to last 24 hours (by timestamp) — prefer entries within last 24h
-    const DAY_MS = 24 * 60 * 60 * 1000;
-    const recent = data.filter(d => d && d.ts && d.ts >= (Date.now() - DAY_MS));
-    const use = (recent && recent.length) ? recent : data.slice(-24);
+    // Fill slots with actual data
+    if (Array.isArray(data)) {
+      for (const d of data) {
+        if (!d || !d.ts) continue;
+        for (const slot of slots) {
+          if (d.ts >= slot.ts - HOUR_MS / 2 && d.ts < slot.end + HOUR_MS / 2) {
+            slot.ok = slot.ok === null ? d.ok : (slot.ok && d.ok);
+          }
+        }
+      }
+    }
     // prepare labels (short time) and values
-    const labels = use.map(d => new Date(d.ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }));
-    const values = use.map(d => d.ok ? 1 : 0);
-    const bgColors = use.map(d => d.ok ? 'rgba(126,243,179,0.95)' : 'rgba(255,134,179,0.95)');
+    const labels = slots.map(s => new Date(s.ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }));
+    const values = slots.map(s => 1);
+    const bgColors = slots.map(s => s.ok === true ? 'rgba(126,243,179,0.95)' : s.ok === false ? 'rgba(255,134,179,0.95)' : 'rgba(255,255,255,0.08)');
     // destroy existing chart if present
     if (window.uptimeChart) { window.uptimeChart.destroy(); window.uptimeChart = null; }
     const ctx = canvas.getContext('2d');
@@ -832,7 +930,10 @@ async function fetchAndRenderUptime(){
           tooltip: {
             callbacks: {
               title: items => { return items && items[0] && items[0].label ? items[0].label : '' },
-              label: ctx => ctx.raw === 1 ? 'OK' : 'FAIL'
+              label: item => {
+                const slot = slots[item.dataIndex];
+                return slot && slot.ok === true ? 'OK' : slot && slot.ok === false ? 'FAIL' : 'No data';
+              }
             }
           }
         },

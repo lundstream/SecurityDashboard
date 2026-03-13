@@ -107,7 +107,7 @@ function upsertCve(id, data, published, cvssScore, enrichment) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET data=excluded.data, published=excluded.published, cvss_score=excluded.cvss_score,
       kev=COALESCE(excluded.kev, cves.kev), has_exploit=COALESCE(excluded.has_exploit, cves.has_exploit),
-      has_patch=COALESCE(excluded.has_patch, cves.has_patch), vendor=COALESCE(excluded.vendor, cves.vendor),
+      has_patch=COALESCE(excluded.has_patch, cves.has_patch), vendor=excluded.vendor,
       discovered=COALESCE(excluded.discovered, cves.discovered)
   `);
   stmt.run(id, typeof data === 'string' ? data : JSON.stringify(data), published || null,
@@ -280,9 +280,43 @@ function getLatestReport() {
 function getReportCves(options) {
   const d = getDb();
   const cutoff = new Date(Date.now() - (options.days || 30) * 24 * 60 * 60 * 1000).toISOString();
+  const cutoffDate = cutoff.slice(0, 10);
+
+  // For KEV queries, filter by kev.date_added instead of cves.published
+  if (options.kevOnly) {
+    let sql = `SELECT k.cve_id, k.vendor AS kev_vendor, k.product AS kev_product, k.description AS kev_description, k.date_added,
+      c.data, c.cvss_score, c.kev, c.has_exploit, c.has_patch, c.vendor, c.discovered, c.published
+      FROM kev k LEFT JOIN cves c ON k.cve_id = c.id WHERE k.date_added >= ?`;
+    const params = [cutoffDate];
+    if (options.vendor) {
+      const vendors = Array.isArray(options.vendor) ? options.vendor : [options.vendor];
+      sql += ` AND lower(k.vendor) IN (${vendors.map(() => '?').join(',')})`;
+      params.push(...vendors.map(v => v.toLowerCase()));
+    }
+    sql += ` ORDER BY k.date_added DESC`;
+    if (options.limit) { sql += ` LIMIT ?`; params.push(options.limit); }
+    return d.prepare(sql).all(...params).map(r => {
+      if (!r.data) {
+        // No CVE data in local DB — build a minimal object from KEV catalog info
+        // KEV entries are "Known Exploited" by definition → _exploit: 1
+        return {
+          id: r.cve_id,
+          descriptions: r.kev_description ? [{ lang: 'en', value: r.kev_description }] : [],
+          _kev: 1, _exploit: 1, _patch: 0,
+          _vendor: r.kev_vendor || '',
+          _discovered: '', _cvss: null,
+          _published: r.date_added || null
+        };
+      }
+      const obj = JSON.parse(r.data);
+      obj._kev = r.kev || 0; obj._exploit = r.has_exploit || 0; obj._patch = r.has_patch || 0;
+      obj._vendor = r.vendor || r.kev_vendor || ''; obj._discovered = r.discovered || ''; obj._cvss = r.cvss_score;
+      return obj;
+    });
+  }
+
   let sql = `SELECT data, cvss_score, kev, has_exploit, has_patch, vendor, discovered, published FROM cves WHERE published >= ?`;
   const params = [cutoff];
-  if (options.kevOnly) { sql += ` AND kev = 1`; }
   if (options.minCvss != null) { sql += ` AND cvss_score IS NOT NULL AND cvss_score >= ?`; params.push(options.minCvss); }
   if (options.maxCvss != null) { sql += ` AND (cvss_score IS NULL OR cvss_score < ?)`; params.push(options.maxCvss); }
   if (options.patchOnly === true) { sql += ` AND has_patch = 1`; }
@@ -305,6 +339,7 @@ function getReportCves(options) {
 function getReportStats(days, vendor) {
   const d = getDb();
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const cutoffDate = cutoff.slice(0, 10);
   let vf = '', vp = [];
   if (vendor) {
     const vendors = Array.isArray(vendor) ? vendor : [vendor];
@@ -313,14 +348,22 @@ function getReportStats(days, vendor) {
   }
   const total = d.prepare(`SELECT COUNT(*) as cnt FROM cves WHERE published >= ?` + vf).get(cutoff, ...vp).cnt;
   const critical = d.prepare(`SELECT COUNT(*) as cnt FROM cves WHERE published >= ? AND cvss_score >= 9` + vf).get(cutoff, ...vp).cnt;
-  const kevCount = d.prepare(`SELECT COUNT(*) as cnt FROM cves WHERE kev = 1 AND published >= ?` + vf).get(cutoff, ...vp).cnt;
+  // Count KEVs by their KEV catalog date_added, not CVE published date
+  let kevSql = `SELECT COUNT(*) as cnt FROM kev WHERE date_added >= ?`;
+  let kevParams = [cutoffDate];
+  if (vendor) {
+    const vendors = Array.isArray(vendor) ? vendor : [vendor];
+    kevSql += ` AND lower(vendor) IN (${vendors.map(() => '?').join(',')})`;
+    kevParams.push(...vendors.map(v => v.toLowerCase()));
+  }
+  const kevCount = d.prepare(kevSql).get(...kevParams).cnt;
   return { total, critical, kevCount };
 }
 
 function getTopVendors(days, limit) {
   const d = getDb();
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  return d.prepare(`SELECT vendor, COUNT(*) as cnt FROM cves WHERE published >= ? AND vendor IS NOT NULL AND vendor != '' GROUP BY vendor ORDER BY cnt DESC LIMIT ?`).all(cutoff, limit);
+  return d.prepare(`SELECT UPPER(SUBSTR(MAX(vendor),1,1)) || SUBSTR(MAX(vendor),2) as vendor, COUNT(*) as cnt FROM cves WHERE published >= ? AND vendor IS NOT NULL AND vendor != '' GROUP BY vendor COLLATE NOCASE ORDER BY cnt DESC LIMIT ?`).all(cutoff, limit);
 }
 
 function getTopVendorsWithBreakdown(days, limit, vendorFilter) {
@@ -332,19 +375,19 @@ function getTopVendorsWithBreakdown(days, limit, vendorFilter) {
     vf = ` AND lower(vendor) IN (${vendors.map(() => '?').join(',')})`;
     vp = vendors.map(v => v.toLowerCase());
   }
-  return d.prepare(`SELECT vendor, COUNT(*) as cnt,
+  return d.prepare(`SELECT UPPER(SUBSTR(MAX(vendor),1,1)) || SUBSTR(MAX(vendor),2) as vendor, COUNT(*) as cnt,
     SUM(CASE WHEN cvss_score >= 9 THEN 1 ELSE 0 END) as critical,
     SUM(CASE WHEN cvss_score >= 7 AND cvss_score < 9 THEN 1 ELSE 0 END) as high,
     SUM(CASE WHEN cvss_score < 7 OR cvss_score IS NULL THEN 1 ELSE 0 END) as other,
     SUM(CASE WHEN kev = 1 THEN 1 ELSE 0 END) as kev
     FROM cves WHERE published >= ? AND vendor IS NOT NULL AND vendor != ''` + vf + `
-    GROUP BY vendor ORDER BY cnt DESC LIMIT ?`).all(cutoff, ...vp, limit);
+    GROUP BY vendor COLLATE NOCASE ORDER BY cnt DESC LIMIT ?`).all(cutoff, ...vp, limit);
 }
 
 function getVendorList(days) {
   const d = getDb();
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  return d.prepare(`SELECT vendor, COUNT(*) as cnt FROM cves WHERE published >= ? AND vendor IS NOT NULL AND vendor != '' GROUP BY vendor ORDER BY cnt DESC`).all(cutoff);
+  return d.prepare(`SELECT UPPER(SUBSTR(MAX(vendor),1,1)) || SUBSTR(MAX(vendor),2) as vendor, COUNT(*) as cnt FROM cves WHERE published >= ? AND vendor IS NOT NULL AND vendor != '' GROUP BY vendor COLLATE NOCASE ORDER BY cnt DESC`).all(cutoff);
 }
 
 // --- AI analysis helpers ---
@@ -361,6 +404,26 @@ function getRecentNews(days) {
   return getDb().prepare(`SELECT title, source, pub_date as pubDate FROM news WHERE pub_date >= ? ORDER BY pub_date DESC LIMIT 50`).all(cutoff);
 }
 
+function searchCves(query, limit) {
+  const d = getDb();
+  const like = '%' + query + '%';
+  return d.prepare(`SELECT data, kev, has_exploit, has_patch, vendor, discovered FROM cves WHERE id LIKE ? OR vendor LIKE ? OR data LIKE ? ORDER BY published DESC LIMIT ?`).all(like, like, like, limit).map(r => {
+    const obj = JSON.parse(r.data);
+    obj._kev = r.kev || 0;
+    obj._exploit = r.has_exploit || 0;
+    obj._patch = r.has_patch || 0;
+    obj._vendor = r.vendor || '';
+    obj._discovered = r.discovered || '';
+    return obj;
+  });
+}
+
+function searchNews(query, limit) {
+  const d = getDb();
+  const like = '%' + query + '%';
+  return d.prepare(`SELECT title, link, pub_date as pubDate, source FROM news WHERE title LIKE ? OR source LIKE ? ORDER BY pub_date DESC LIMIT ?`).all(like, like, limit);
+}
+
 module.exports = {
   getDb,
   upsertCve, getCves, getCvesFiltered, getCveCount, purgeCves,
@@ -370,5 +433,6 @@ module.exports = {
   upsertKev, getKevSet, getKevEntries, updateCveEnrichment,
   saveReport, getLatestReport, getReportCves, getReportStats, getTopVendors, getTopVendorsWithBreakdown, getVendorList,
   saveAiAnalysis, getLatestAiAnalysis, getRecentNews,
+  searchCves, searchNews,
   closeDb
 };
