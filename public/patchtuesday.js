@@ -171,8 +171,12 @@ function mdToHtml(md) {
     const isNumbered = /^\d+[\.\)] /.test(trimmed);
     const isSubHeading = trimmed.startsWith('### ');
     const isHeading = trimmed.startsWith('## ');
+    const isH1 = !isHeading && !isSubHeading && trimmed.startsWith('# ');
 
-    if (isSubHeading) {
+    if (isH1) {
+      closeAll();
+      html += '<h2>' + inlineMd(trimmed.slice(2)) + '</h2>';
+    } else if (isSubHeading) {
       closeAll();
       html += '<h3>' + inlineMd(trimmed.slice(4)) + '</h3>';
     } else if (isHeading) {
