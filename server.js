@@ -1374,13 +1374,19 @@ app.post('/api/patchtuesday/analyze', (req, res) => {
 function buildNewsSummaryAiPrompt(language) {
   language = language || 'en';
 
+  const news = db.getRecentNews(7);
+
+  const newsSummary = news.map(n =>
+    `  [${n.source}] ${n.title}${n.link ? ' — ' + n.link : ''}`
+  ).join('\n');
+
   const langInstruction = language === 'sv'
     ? 'Write the ENTIRE response in Swedish. All section headers and body text must be in Swedish.'
     : 'Write the response in English.';
 
   const today = localDateStr(new Date());
 
-  return `You are a senior IT analyst writing a weekly news briefing for Swedish IT consultants. You have access to current news from the web.
+  return `You are a senior IT analyst writing a weekly news briefing for Swedish IT consultants.
 ${langInstruction}
 
 Today's date is ${today}.
@@ -1389,23 +1395,27 @@ The target audience is IT consultants working in Sweden. Write from a Swedish pe
 
 IMPORTANT: Do NOT start with a title, heading, date line, or introduction. Jump straight into the first section header.
 IMPORTANT: Write in flowing prose paragraphs, not bullet lists. Use bullet lists only when listing specific items (e.g. a list of tools, patches, or recommendations). The main news coverage should read like a professional news briefing with paragraphs, not a bullet-point summary.
-IMPORTANT: Include source links for EVERY news story and claim using markdown link format [source name](URL). Use real, verifiable article URLs. Weave source links naturally into the text.
+IMPORTANT: When referencing a news story, include a source link ONLY if the article URL is provided in the DATA section below. Use markdown link format [source name](URL). Do NOT fabricate, guess, or make up any URLs. If no URL is available for a story, just mention the source name in plain text without a link.
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
 
 ## ${language === 'sv' ? 'Veckans viktigaste IT-nyheter' : "This Week's Top IT News"}
-Cover the 10 biggest IT and cybersecurity news stories of the past week from a Swedish perspective. Use ### subheadings for each story, followed by a paragraph of 2-4 sentences explaining what happened and why it matters for Swedish IT professionals. Include source links within the text. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends.
+Cover the 10 biggest IT and cybersecurity news stories of the past week from a Swedish perspective. Use ### subheadings for each story, followed by a paragraph of 2-4 sentences explaining what happened and why it matters for Swedish IT professionals. Include source links from the DATA section when available. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends.
 
 ## ${language === 'sv' ? 'Branschtrender och utveckling' : 'Industry Trends & Developments'}
-Cover notable technology trends, AI developments, cloud/infrastructure changes, regulatory updates (NIS2, GDPR enforcement, EU Cyber Resilience Act), and market movements relevant to IT consultants. Focus on what consultants need to know to advise their clients. Include source links.
+Cover notable technology trends, AI developments, cloud/infrastructure changes, regulatory updates (NIS2, GDPR enforcement, EU Cyber Resilience Act), and market movements relevant to IT consultants. Focus on what consultants need to know to advise their clients.
 
 ## ${language === 'sv' ? 'Hot och aktörer' : 'Threats & Actors'}
-Brief overview of notable threat actor activity, ransomware campaigns, phishing trends, or supply chain attacks from the week. Keep it high-level and actionable — what should IT consultants warn their clients about? Include source links.
+Brief overview of notable threat actor activity, ransomware campaigns, phishing trends, or supply chain attacks from the week. Keep it high-level and actionable — what should IT consultants warn their clients about?
 
 ## ${language === 'sv' ? 'Källor' : 'Sources'}
-List all sources referenced in this briefing with their article URLs as markdown links.
+List ONLY sources that have real article URLs from the DATA section. Do NOT list any source without a verified URL from the data.
 
-Aim for approximately 1200-1600 words. Be informative and professional. Write from a Swedish IT industry perspective even when discussing global events.`;
+Aim for approximately 1200-1600 words. Be informative and professional. Write from a Swedish IT industry perspective even when discussing global events.
+
+--- DATA ---
+RECENT NEWS ARTICLES (last 7 days, with verified URLs):
+${newsSummary || '  No news available'}`;
 }
 
 async function runNewsSummaryAiAnalysis(language) {
