@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Top-priority CVE's</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238400ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
+  <style>
+    :root{
+      --bg-1:#0f0620;
+      --bg-2:#2c0038;
+      --accent-pink:#ff4da6;
+      --accent-purple:#8400ff;
+      --card-bg:rgba(47, 0, 59, 0.726);
+      --muted:rgba(255,255,255,0.6);
+      --header-height:72px;
+      --footer-height:56px;
+    }
+    html,body{min-height:100vh}
+    body{
+      margin:0;font-family:geist-sans,Inter,Arial,Helvetica,sans-serif;color:#efe8ff;
+      background:#0a0015;
+      overflow-y:auto;min-height:100vh;
+      display:flex;flex-direction:column;
+    }
+    body::before{
+      content:"";position:fixed;inset:0;opacity:0.08;pointer-events:none;z-index:0;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='173' viewBox='0 0 200 173'><defs><pattern id='h' width='40' height='34' patternUnits='userSpaceOnUse'><polygon points='20,0 40,10 40,24 20,34 0,24 0,10' fill='%23ffffff' opacity='0.06'/></pattern></defs><rect width='100%25' height='100%25' fill='url(%23h)'/></svg>");
+      background-repeat:repeat;mix-blend-mode:overlay;filter:blur(0.4px) saturate(120%);
+    }
+    header{position:relative;top:0;left:0;right:0;z-index:125;background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);padding:13px 20px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between}
+    h1,h2,h3{margin:0;font-family:geist-mono,Inter,sans-serif;font-weight:700}
+    .card{background:var(--card-bg);border:1px solid rgba(255,255,255,0.06);padding:12px;margin:10px 0;border-radius:10px;box-shadow:0 6px 18px rgba(11,3,28,0.45)}
+    .card:hover{box-shadow:0 5px 10px rgba(128,12,70,0.144);background:rgba(255,255,255,0.010)}
+    .meta{color:var(--muted);font-size:0.9em}
+    .tag{display:inline-block;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));color:#fff;padding:4px 8px;border-radius:999px;margin-left:8px;font-size:0.8em}
+    button{background:var(--accent-purple);color:#fff;border:none;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:600}
+    button:hover{filter:brightness(1.18)}
+    .site-title{font-family:geist-mono,Orbitron,Inter,Arial;font-weight:700;color:#fff}
+    .logo{width:56px;height:56px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#111;background:linear-gradient(90deg,var(--accent-pink),var(--accent-purple));box-shadow:0 6px 20px rgba(123,44,255,0.18)}
+    .logo svg.feather,.logo i{height:1.5em !important;width:1.5em !important;color:#fff}
+    svg.feather{vertical-align:middle;height:1em;width:1em;display:inline-block;margin-right:0.4rem;transform:translateY(-0.12em)}
+    #theme-toggle{background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;padding:6px;margin-left:12px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+    #theme-toggle:hover{color:#fff}
+    #theme-toggle svg{width:20px;height:20px}
+    .lang-toggle-btn{background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;padding:6px 10px;margin-left:4px;border-radius:999px;display:flex;align-items:center;gap:5px;font-size:0.82em;font-weight:600;font-family:inherit;transition:color .2s}
+    .lang-toggle-btn:hover{color:#fff}
+    .lang-toggle-btn svg{width:18px;height:18px}
+    html.light-theme .lang-toggle-btn{color:rgba(40,20,60,0.6)}
+    html.light-theme .lang-toggle-btn:hover{color:#1a0a2e}
+    #site-footer{position:relative;left:0;right:0;bottom:0;background:linear-gradient(135deg,var(--bg-1) 0%,var(--bg-2) 100%);color:rgba(255,255,255,0.92);font-size:0.85rem;z-index:120;padding:15px 0 11px;pointer-events:auto;box-sizing:border-box;margin-top:auto}
+    .footer-inner{max-width:1100px;width:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 12px;box-sizing:border-box;position:relative}
+    .footer-github{display:inline-flex;align-items:center;gap:4px}
+    .footer-github svg.feather{margin-right:4px;transform:translateY(-0.08em);height:0.95em;width:0.95em}
+    #main-content{position:relative;left:0;right:0;display:flex;flex-direction:column;padding:8px 20px;box-sizing:border-box;overflow-x:hidden;flex:1}
+    /* CVE enrichment badges */
+    .cve-badges{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
+    .badge{display:inline-block;padding:2px 7px;border-radius:999px;font-size:0.72em;font-weight:600;letter-spacing:0.02em}
+    .badge-kev{background:#e74c3c;color:#fff}
+    .badge-exploit{background:#e67e22;color:#fff}
+    .badge-patch{background:#2ecc71;color:#fff}
+    .badge-no{background:rgba(255,255,255,0.08);color:var(--muted)}
+    .badge-nopatch{background:rgba(255,77,77,0.12);color:#ff6b6b}
+    .badge-risk{background:rgba(132,0,255,0.18);color:#b580ff;font-weight:700}
+    .desc{font-family:'Geist Sans',Inter,Arial,Helvetica,sans-serif;color:var(--muted);font-size:0.95em;margin-top:6px}
+    .show-more{color:var(--accent-pink);cursor:pointer;font-size:0.85em;text-decoration:none;margin-left:4px}
+    .show-more:hover{text-decoration:underline}
+    .chart-container{position:relative;height:280px;padding:10px}
+    #risk-items a{color:#fff;text-decoration:none}
+    #risk-items a:hover{color:#fff;text-decoration:underline}
+    .load-more-btn{display:inline-block;padding:8px 14px;margin-top:8px;background:var(--accent-purple);color:#fff;border:none;border-radius:999px;font-size:0.85em;font-weight:600;cursor:pointer;text-align:center}
+    .load-more-btn:hover{filter:brightness(1.18)}
+    /* Filters */
+    .cvss-dropdown{position:relative;display:inline-block}
+    .filter-select{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:inherit;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.85em;font-family:inherit;display:flex;align-items:center;gap:4px}
+    .filter-select:hover{border-color:rgba(255,255,255,0.2)}
+    .caret{font-size:0.7em;opacity:0.5}
+    .cvss-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:120px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);overflow:hidden;list-style:none;padding:0;margin:0}
+    .cvss-dropdown-menu[aria-hidden="false"]{display:block}
+    .cvss-option{padding:8px 14px;cursor:pointer;font-size:0.85em;transition:background 0.1s}
+    .cvss-option:hover{background:rgba(255,255,255,0.06)}
+    .cvss-option[aria-selected="true"]{background:rgba(132,0,255,0.15)}
+    /* Light theme */
+    html.light-theme{--bg-1:#f0edf5;--bg-2:#e8e0f0;--card-bg:rgba(255,255,255,0.85);--muted:rgba(40,20,60,0.6)}
+    html.light-theme body{color:#1a0a2e;background:linear-gradient(135deg,#ffffff 0%,#ffffff 40%,#ffffff 60%) !important}
+    html.light-theme body::before{opacity:0.03}
+    html.light-theme header{background:linear-gradient(135deg,#f0edf5 0%,#e8e0f0 100%);color:rgba(40,20,60,0.88)}
+    html.light-theme #site-footer{background:linear-gradient(135deg,#f0edf5 0%,#e8e0f0 100%);color:rgba(40,20,60,0.88)}
+    html.light-theme .site-title{color:#1a0a2e}
+    html.light-theme .card{background:var(--card-bg);border:1px solid rgba(100,60,140,0.1);box-shadow:0 4px 12px rgba(100,60,140,0.08)}
+    html.light-theme .card:hover{background:rgba(20,0,43,0.055);box-shadow:0 5px 14px rgba(100,60,140,0.12)}
+    html.light-theme #risk-items a{color:#1a0a2e}
+    html.light-theme #risk-items a:hover{color:#8400ff}
+    html.light-theme .desc{color:rgba(40,20,60,0.55)}
+    html.light-theme .meta{color:rgba(40,20,60,0.55)}
+    html.light-theme .footer-github,html.light-theme .footer-github span{color:rgba(40,20,60,0.75) !important}
+    html.light-theme .copyright{color:rgba(40,20,60,0.6)}
+    html.light-theme #theme-toggle{color:rgba(40,20,60,0.6)}
+    html.light-theme #theme-toggle:hover{color:#1a0a2e}
+    html.light-theme .badge-no{background:rgba(40,20,60,0.06);color:rgba(40,20,60,0.5)}
+    html.light-theme .badge-nopatch{background:rgba(200,40,40,0.08);color:#c0392b}
+    html.light-theme .filter-select{background:rgba(100,60,140,0.06);border-color:rgba(100,60,140,0.12);color:#1a0a2e}
+    html.light-theme .cvss-dropdown-menu{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12)}
+    html.light-theme .cvss-option:hover{background:rgba(100,60,140,0.06)}
+    html.light-theme .load-more-btn{background:var(--accent-purple);color:#fff}
+    html.light-theme .chart-container{background:linear-gradient(180deg,rgba(100,60,140,0.02),rgba(100,60,140,0.04));border-radius:10px}
+    @media(max-width:700px){
+      header{flex-direction:column;align-items:flex-start;gap:10px}
+      .two-col{flex-direction:column !important}
+      .two-col>*{flex:1 1 100% !important;min-width:0 !important}
+    }
+  </style>
+</head>
+<body>
+  <canvas id="synthwave-canvas" style="position:fixed;inset:0;width:100%;height:100%;z-index:-1"></canvas>
+  <script>if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light-theme');</script>
+  <header>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="/" style="text-decoration:none"><div class="logo"><i data-feather="shield" style="vertical-align:middle"></i></div></a>
+      <a href="/" style="text-decoration:none"><div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div></a>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <a href="/" style="color:var(--muted);text-decoration:none;font-size:0.9em;display:inline-flex;align-items:center;gap:4px"><i data-feather="arrow-left" style="width:14px;height:14px"></i> Dashboard</a>
+      <button id="theme-toggle" aria-label="Toggle theme"><i data-feather="sun"></i></button>
+      <button class="lang-toggle-btn" id="lang-toggle-btn" aria-label="Toggle language"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg> <span id="lang-label">EN</span></button>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <div style="max-width:960px;margin:0 auto;width:100%">
+
+      <!-- Title + filters -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+        <h1 style="font-size:1.4rem;display:flex;align-items:center;gap:8px">
+          <i data-feather="trending-up" style="color:var(--accent-pink)"></i>
+          <span id="risk-heading-text">Top-priority CVE's</span>
+        </h1>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:0.9rem;color:var(--muted)" id="risk-vendor-label">Vendor:</label>
+            <div id="risk-vendor-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
+              <button id="risk-vendor-btn" class="filter-select" aria-expanded="false">All <span class="caret">&#9662;</span></button>
+              <ul id="risk-vendor-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true" style="max-height:300px;overflow-y:auto">
+                <li class="cvss-option" data-value="all" role="option" aria-selected="true">All</li>
+              </ul>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:0.9rem;color:var(--muted)" id="risk-age-label">Period:</label>
+            <div id="risk-age-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
+              <button id="risk-age-btn" class="filter-select" aria-expanded="false"><span id="risk-age-text">90 days</span> <span class="caret">&#9662;</span></button>
+              <ul id="risk-age-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true">
+                <li class="cvss-option" data-value="30" role="option">30 days</li>
+                <li class="cvss-option" data-value="90" role="option" aria-selected="true">90 days</li>
+                <li class="cvss-option" data-value="365" role="option">1 year</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Risk score explanation -->
+      <div class="card" style="padding:14px 18px;margin-bottom:16px;font-size:0.88em;line-height:1.6">
+        <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:260px">
+            <div style="font-weight:600;margin-bottom:6px;font-size:1.05em" id="risk-formula-title">How risk score is calculated</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">
+              <span style="background:rgba(132,0,255,0.15);color:#b580ff;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">CVSS &times; 10</span>
+              <span style="color:var(--muted)">+</span>
+              <span style="background:rgba(255,56,96,0.15);color:#ff5c7c;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">KEV +30</span>
+              <span style="color:var(--muted)">+</span>
+              <span style="background:rgba(255,170,0,0.15);color:#ffaa00;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">Exploit +20</span>
+              <span style="color:var(--muted)">+</span>
+              <span style="background:rgba(255,100,50,0.15);color:#ff8844;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">No Patch +15</span>
+              <span style="color:var(--muted)">+</span>
+              <span style="background:rgba(0,180,255,0.15);color:#44bbff;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">Recency 0&ndash;15</span>
+            </div>
+            <div style="color:var(--muted);font-size:0.92em" id="risk-formula-desc">A CVE that is actively exploited (KEV), has a public exploit, no available patch, and was published recently will score highest, regardless of its CVSS severity rating alone.</div>
+          </div>
+          <div style="min-width:140px;text-align:center">
+            <div style="font-weight:600;margin-bottom:4px;font-size:0.92em" id="risk-scale-title">Score scale</div>
+            <div style="display:flex;flex-direction:column;gap:3px;font-size:0.85em">
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ff2244;display:inline-block"></span><span>120+ Critical</span></div>
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ff6622;display:inline-block"></span><span>100&ndash;119 High</span></div>
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ffaa00;display:inline-block"></span><span>80&ndash;99 Medium</span></div>
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#44bb44;display:inline-block"></span><span>&lt;80 Lower</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-column: chart + list -->
+      <div class="two-col" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+        <!-- Vendor risk chart -->
+        <div class="card" style="flex:0 0 340px;padding:12px;min-height:200px">
+          <div style="font-weight:600;margin-bottom:6px" id="risk-vendor-chart-title">Highest Risk Vendors</div>
+          <div class="chart-container" style="height:280px;display:flex;align-items:center;justify-content:center">
+            <canvas id="risk-vendor-canvas"></canvas>
+          </div>
+        </div>
+        <!-- CVE list -->
+        <div style="flex:1;min-width:300px">
+          <div id="risk-items"><span style="color:var(--muted)">Loading...</span></div>
+          <div style="text-align:center;padding:12px 0">
+            <button class="load-more-btn" id="risk-load-more" style="display:none">Load more</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div id="site-footer">
+    <div class="footer-inner">
+      <a class="footer-github" href="https://github.com/lundstream/SecurityDashboard" target="_blank" rel="noopener" style="color:rgba(255,255,255,0.788);text-decoration:none">
+        <i data-feather="github" style="vertical-align:middle"></i>
+        <span>Security dashboard on GitHub</span>
+      </a>
+      <span class="copyright">&copy; 2026 lundstream.net, all rights reserved.</span>
+    </div>
+  </div>
+
+  <script src="/risk.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      function tryReplace(){ if(window.feather){ try{ feather.replace(); }catch(e){} } else { setTimeout(tryReplace, 200); } }
+      tryReplace();
+    });
+  </script>
+</body>
+</html>

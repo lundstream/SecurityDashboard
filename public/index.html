@@ -373,6 +373,7 @@
             <a href="/report.html?period=yesterday"><i data-feather="clock"></i> <span class="i18n-yesterday">Yesterday</span></a>
             <a href="/report.html?period=week"><i data-feather="calendar"></i> <span class="i18n-week">Last Week</span></a>
             <a href="/report.html?period=month"><i data-feather="calendar"></i> <span class="i18n-month">Last Month</span></a>
+            <a href="/risk.html"><i data-feather="trending-up"></i> <span id="nav-risk-label">Top-priority CVE's</span></a>
           </div>
         </div>
         <div class="links-dropdown" id="links-dropdown" style="margin-left:4px">
@@ -478,86 +479,6 @@
     </div>
   </div>
   </div>
-
-  <!-- Risk Priority Section -->
-  <section id="risk-priority-section" style="margin-top:24px;padding:0 0 16px 0;">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <h1 style="display:flex;align-items:center;margin:0;white-space:nowrap" id="risk-heading">
-        <i data-feather="trending-up" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i>
-        <span id="risk-heading-text">Top-priority CVE's</span>
-      </h1>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:6px">
-          <label style="font-size:0.9rem;color:var(--muted)" id="risk-vendor-label">Vendor:</label>
-          <div id="risk-vendor-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
-            <button id="risk-vendor-btn" class="filter-select" aria-expanded="false">All <span class="caret">▾</span></button>
-            <ul id="risk-vendor-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true" style="max-height:300px;overflow-y:auto">
-              <li class="cvss-option" data-value="all" role="option" aria-selected="true">All</li>
-            </ul>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <label style="font-size:0.9rem;color:var(--muted)" id="risk-age-label">Period:</label>
-          <div id="risk-age-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
-            <button id="risk-age-btn" class="filter-select" aria-expanded="false"><span id="risk-age-text">90 days</span> <span class="caret">▾</span></button>
-            <ul id="risk-age-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true">
-              <li class="cvss-option" data-value="30" role="option">30 days</li>
-              <li class="cvss-option" data-value="90" role="option" aria-selected="true">90 days</li>
-              <li class="cvss-option" data-value="365" role="option">1 year</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Risk score explanation -->
-    <div class="card" style="padding:14px 18px;margin-bottom:16px;font-size:0.88em;line-height:1.6">
-      <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
-        <div style="flex:1;min-width:260px">
-          <div style="font-weight:600;margin-bottom:6px;font-size:1.05em" id="risk-formula-title">How risk score is calculated</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">
-            <span class="risk-chip" style="background:rgba(132,0,255,0.15);color:#b580ff;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">CVSS × 10</span>
-            <span style="color:var(--muted)">+</span>
-            <span class="risk-chip" style="background:rgba(255,56,96,0.15);color:#ff5c7c;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">KEV +30</span>
-            <span style="color:var(--muted)">+</span>
-            <span class="risk-chip" style="background:rgba(255,170,0,0.15);color:#ffaa00;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">Exploit +20</span>
-            <span style="color:var(--muted)">+</span>
-            <span class="risk-chip" style="background:rgba(255,100,50,0.15);color:#ff8844;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">No Patch +15</span>
-            <span style="color:var(--muted)">+</span>
-            <span class="risk-chip" style="background:rgba(0,180,255,0.15);color:#44bbff;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">Recency 0–15</span>
-          </div>
-          <div style="color:var(--muted);font-size:0.92em" id="risk-formula-desc">A CVE that is actively exploited (KEV), has a public exploit, no available patch, and was published recently will score highest — regardless of its CVSS severity rating alone.</div>
-        </div>
-        <div style="min-width:140px;text-align:center">
-          <div style="font-weight:600;margin-bottom:4px;font-size:0.92em" id="risk-scale-title">Score scale</div>
-          <div style="display:flex;flex-direction:column;gap:3px;font-size:0.85em">
-            <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ff2244;display:inline-block"></span><span>120+ Critical</span></div>
-            <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ff6622;display:inline-block"></span><span>100–119 High</span></div>
-            <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ffaa00;display:inline-block"></span><span>80–99 Medium</span></div>
-            <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#44bb44;display:inline-block"></span><span>&lt;80 Lower</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Two-column: chart + list -->
-    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
-      <!-- Vendor risk chart -->
-      <div class="card" style="flex:0 0 340px;padding:12px;min-height:200px">
-        <div style="font-weight:600;margin-bottom:6px" id="risk-vendor-chart-title">Highest Risk Vendors</div>
-        <div style="height:260px;display:flex;align-items:center;justify-content:center">
-          <canvas id="risk-vendor-canvas"></canvas>
-        </div>
-      </div>
-      <!-- CVE list -->
-      <div style="flex:1;min-width:300px">
-        <div id="risk-list" class="list-scroll" style="max-height:600px">
-          <div id="risk-items"><span style="color:var(--muted)">Loading...</span></div>
-          <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="risk-load-more" style="display:none">Load more</button></div>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <script src="/app.js"></script>
   <script>
