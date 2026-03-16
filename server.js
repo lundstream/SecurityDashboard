@@ -1151,6 +1151,17 @@ function getNextPatchTuesday() {
   return getSecondTuesday(ny, nm % 12);
 }
 
+// Get the current (most recent or today's) Patch Tuesday
+function getCurrentPatchTuesday() {
+  const now = new Date();
+  const thisMonth = getSecondTuesday(now.getFullYear(), now.getMonth());
+  if (localDateStr(thisMonth) === localDateStr(now) || thisMonth <= now) return thisMonth;
+  // This month's PT hasn't happened yet — use last month's
+  const pm = now.getMonth() - 1;
+  const py = pm < 0 ? now.getFullYear() - 1 : now.getFullYear();
+  return getSecondTuesday(py, (pm + 12) % 12);
+}
+
 function getPatchTuesdayDates(count) {
   const dates = [];
   const now = new Date();
@@ -1204,6 +1215,8 @@ function buildPatchTuesdayAiPrompt(language) {
     `  [${n.source}] ${n.title}`
   ).join('\n');
 
+  const currentPt = getCurrentPatchTuesday();
+  const currentPtStr = localDateStr(currentPt);
   const nextPt = getNextPatchTuesday();
   const nextPtStr = localDateStr(nextPt);
 
@@ -1211,18 +1224,18 @@ function buildPatchTuesdayAiPrompt(language) {
     ? 'Write the ENTIRE response in Swedish. All section headers and body text must be in Swedish. Keep CVE IDs and vendor names in their original English form.'
     : 'Write the response in English.';
 
-  return `You are a senior IT security analyst specializing in Microsoft Patch Tuesday analysis. The next Patch Tuesday is ${nextPtStr}.
+  return `You are a senior IT security analyst specializing in Microsoft Patch Tuesday analysis. This analysis covers the Patch Tuesday of ${currentPtStr}. The next Patch Tuesday after this is ${nextPtStr}.
 ${langInstruction}
 
-Provide a thorough pre-Patch Tuesday briefing based on the current threat landscape. This should help IT administrators prepare for the upcoming patch cycle.
+Provide a thorough Patch Tuesday briefing based on the current threat landscape. This should help IT administrators understand what was released and act on the patches for this cycle.
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
 
-## ${language === 'sv' ? 'Sammanfattning inför Patch Tuesday' : 'Patch Tuesday Preview'}
-A thorough overview of what to expect this Patch Tuesday. Cover recent Microsoft vulnerability trends, the volume and severity of recent CVEs, and what areas demand immediate attention (4-6 sentences).
+## ${language === 'sv' ? 'Sammanfattning Patch Tuesday' : 'Patch Tuesday Summary'}
+A thorough overview of this Patch Tuesday cycle. Cover Microsoft vulnerability trends, the volume and severity of CVEs, and what areas demand immediate attention (4-6 sentences).
 
 ## ${language === 'sv' ? 'Kritiska Microsoft-sårbarheter' : 'Critical Microsoft Vulnerabilities'}
-Analyze the most critical Microsoft CVEs from the current cycle. For each major CVE, explain the affected product (Windows, Office, Exchange, Azure, Edge, etc.), the attack vector, real-world impact, and urgency. Focus on KEV entries and zero-days.
+Analyze the most critical Microsoft CVEs from this cycle. For each major CVE, explain the affected product (Windows, Office, Exchange, Azure, Edge, etc.), the attack vector, real-world impact, and urgency. Focus on KEV entries and zero-days.
 
 ## ${language === 'sv' ? 'Aktiva hot och utnyttjade sårbarheter' : 'Active Threats & Exploited Vulnerabilities'}
 Detail any known exploited vulnerabilities (KEV), active exploitation campaigns, and zero-day threats relevant to Microsoft products. Explain the risk and who is affected.
@@ -1236,12 +1249,13 @@ Provide a clear priority list for IT teams:
 ## ${language === 'sv' ? 'Drabbade produkter och komponenter' : 'Affected Products & Components'}
 Break down which Microsoft products and components are most affected. Help IT teams understand which systems need attention first.
 
-## ${language === 'sv' ? 'Rekommendationer och förberedelser' : 'Recommendations & Preparation'}
-Provide 5-8 specific, actionable recommendations for IT administrators to prepare for this Patch Tuesday. Include pre-patch testing advice, rollback planning, and monitoring guidance.
+## ${language === 'sv' ? 'Rekommendationer' : 'Recommendations'}
+Provide 5-8 specific, actionable recommendations for IT administrators to act on this Patch Tuesday. Include patch testing advice, rollback planning, and monitoring guidance.
 
 Aim for approximately 1200-1500 words. Be specific and reference actual CVE IDs from the data. Focus on Microsoft products but mention other critical vendors if relevant.
 
 --- DATA ---
+CURRENT PATCH TUESDAY: ${currentPtStr}
 NEXT PATCH TUESDAY: ${nextPtStr}
 STATS (last 30 days): ${stats.total} total CVEs, ${stats.critical} critical (CVSS>=9), ${stats.kevCount} known exploited
 
@@ -1330,11 +1344,13 @@ async function runPatchTuesdayAiBothLanguages() {
 app.get('/api/patchtuesday', (req, res) => {
   try {
     const nextPt = getNextPatchTuesday();
+    const currentPt = getCurrentPatchTuesday();
     const language = req.query.lang === 'sv' ? 'sv' : 'en';
     const analysis = db.getLatestAiAnalysis('patchtuesday', language);
 
     res.json({
       nextPatchTuesday: localDateStr(nextPt),
+      currentPatchTuesday: localDateStr(currentPt),
       analysis: analysis ? analysis.analysis : null,
       analysisGeneratedAt: analysis ? analysis.generated_at : null
     });
@@ -1792,16 +1808,11 @@ function scheduleAiAnalysis() {
       }
     }
 
-    // Patch Tuesday: run on the Monday before (day before PT) at 20:xx
-    // Also re-run on PT day itself at 08:xx for the freshest data
+    // Patch Tuesday: run on PT day at 00:xx (just after midnight)
     const nextPt = getNextPatchTuesday();
     const ptDateStr = localDateStr(nextPt);
-    const dayBefore = new Date(nextPt);
-    dayBefore.setDate(dayBefore.getDate() - 1);
-    const dayBeforeStr = localDateStr(dayBefore);
     const todayLocal = localDateStr(now);
-    const shouldRunPt = (todayLocal === dayBeforeStr && hour === 20) || (todayLocal === ptDateStr && hour === 8);
-    if (shouldRunPt) {
+    if (todayLocal === ptDateStr && hour === 0) {
       const lastPt = db.getLatestAiAnalysis('patchtuesday', 'en');
       if (!lastPt || !lastPt.generated_at || lastPt.generated_at.slice(0, 10) !== todayLocal) {
         console.log('[AI] Scheduled Patch Tuesday analysis starting...');
@@ -1810,7 +1821,7 @@ function scheduleAiAnalysis() {
     }
   }, 30 * 60 * 1000); // Check every 30 minutes
 
-  console.log('[AI] Analysis scheduled: daily (06:00), weekly (Sunday 23:59), monthly (last day 23:59), Patch Tuesday (Monday before + PT day)');
+  console.log('[AI] Analysis scheduled: daily (06:00), weekly (Sunday 23:59), monthly (last day 23:59), Patch Tuesday (00:01 on PT day)');
 }
 
 // =========================================================================
