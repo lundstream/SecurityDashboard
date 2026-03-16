@@ -1368,6 +1368,139 @@ app.post('/api/patchtuesday/analyze', (req, res) => {
 });
 
 // =========================================================================
+//  NEWS SUMMARY (Omvärldsanalys) — AI-powered weekly IT news analysis
+// =========================================================================
+
+function buildNewsSummaryAiPrompt(language) {
+  language = language || 'en';
+
+  const news = db.getRecentNews(7);
+  const stats = db.getReportStats(7);
+  const kevCves = db.getReportCves({ days: 7, kevOnly: true }).map(simplify);
+
+  const newsSummary = news.map(n =>
+    `  [${n.source}] ${n.title}`
+  ).join('\n');
+
+  const kevSummary = kevCves.slice(0, 10).map(c =>
+    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 120)}`
+  ).join('\n');
+
+  const langInstruction = language === 'sv'
+    ? 'Write the ENTIRE response in Swedish. All section headers and body text must be in Swedish.'
+    : 'Write the response in English.';
+
+  return `You are a senior IT analyst writing a weekly news briefing for Swedish IT consultants.
+${langInstruction}
+
+The target audience is IT consultants working in Sweden. Focus on the biggest IT and cybersecurity news from the past week. This is NOT a CVE report — keep CVE references to a minimum and only mention them when they are directly tied to a major news story. This should feel like a news summary / omvärldsanalys, not a vulnerability bulletin.
+
+STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
+
+## ${language === 'sv' ? 'Veckans viktigaste IT-nyheter' : "This Week's Top IT News"}
+Summarize the 3-5 biggest IT and cybersecurity news stories of the week. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends. Write 2-4 sentences per story explaining what happened and why it matters.
+
+## ${language === 'sv' ? 'Svenska perspektivet' : 'Swedish Perspective'}
+Highlight any news particularly relevant to Sweden and Nordic countries. Include CERT-SE advisories, MSB communications, Swedish government IT decisions, or incidents affecting Swedish organizations. If nothing Sweden-specific happened, discuss how global events impact Swedish IT infrastructure or organizations.
+
+## ${language === 'sv' ? 'Branschtrender och utveckling' : 'Industry Trends & Developments'}
+Cover notable technology trends, AI developments, cloud/infrastructure changes, regulatory updates (NIS2, GDPR enforcement, EU Cyber Resilience Act), and market movements relevant to IT consultants. Focus on what consultants need to know to advise their clients.
+
+## ${language === 'sv' ? 'Hot och aktörer' : 'Threats & Actors'}
+Brief overview of notable threat actor activity, ransomware campaigns, phishing trends, or supply chain attacks from the week. Keep it high-level and actionable — what should IT consultants warn their clients about?
+
+## ${language === 'sv' ? 'Rekommendationer för IT-konsulter' : 'Recommendations for IT Consultants'}
+Provide 4-6 specific, actionable takeaways for IT consultants. What should they discuss with clients? What actions should be prioritized? What trends should they be aware of?
+
+Aim for approximately 1000-1300 words. Be informative and professional. Write from a Swedish IT industry perspective even when discussing global events.
+
+--- DATA ---
+RECENT SECURITY NEWS (last 7 days):
+${newsSummary || '  No news available'}
+
+VULNERABILITY CONTEXT (last 7 days): ${stats.total} total CVEs, ${stats.critical} critical, ${stats.kevCount} known exploited
+
+KNOWN EXPLOITED VULNERABILITIES (for context only — don't make this the focus):
+${kevSummary || '  None this week'}`;
+}
+
+async function runNewsSummaryAiAnalysis(language) {
+  language = language || 'en';
+  if (!aiConfig.enabled || !aiConfig.githubToken) {
+    console.log('[AI] News summary analysis skipped (disabled or no token)');
+    return null;
+  }
+
+  const prompt = buildNewsSummaryAiPrompt(language);
+  const model = aiConfig.model || 'gpt-4o-mini';
+  const maxTokens = aiConfig.maxTokens || 4000;
+
+  console.log(`[AI] Running news summary analysis (${language}) with model ${model}...`);
+
+  try {
+    const resp = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${aiConfig.githubToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: language === 'sv'
+            ? 'Du är en erfaren IT-analytiker som skriver veckovisa omvärldsanalyser för svenska IT-konsulter. Skriv professionellt och informativt på svenska. Använd markdown-formatering.'
+            : 'You are an experienced IT analyst writing weekly news briefings for Swedish IT consultants. Write professionally and informatively. Use markdown formatting.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.3
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error(`[AI] News summary API error ${resp.status}: ${errText}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    const analysis = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+
+    if (!analysis) {
+      console.error('[AI] News summary: No content in response');
+      return null;
+    }
+
+    db.saveAiAnalysis('newssummary', analysis, language);
+    console.log(`[AI] News summary (${language}) saved (${analysis.length} chars)`);
+    return analysis;
+  } catch (e) {
+    console.error('[AI] News summary analysis failed:', e.message);
+    return null;
+  }
+}
+
+async function runNewsSummaryAiBothLanguages() {
+  const en = await runNewsSummaryAiAnalysis('en');
+  const sv = await runNewsSummaryAiAnalysis('sv');
+  return { en, sv };
+}
+
+// Return news summary AI analysis
+app.get('/api/newssummary', (req, res) => {
+  try {
+    const language = req.query.lang === 'sv' ? 'sv' : 'en';
+    const analysis = db.getLatestAiAnalysis('newssummary', language);
+    res.json({
+      analysis: analysis ? analysis.analysis : null,
+      analysisGeneratedAt: analysis ? analysis.generated_at : null
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// =========================================================================
 //  TOOLS API ROUTES
 // =========================================================================
 const dns = require('dns');
@@ -1783,6 +1916,13 @@ function scheduleAiAnalysis() {
         console.log('[AI] Scheduled weekly analysis starting...');
         await runAiAnalysisBothLanguages('week');
       }
+
+      // News summary: also run weekly on Sundays
+      const lastNews = db.getLatestAiAnalysis('newssummary', 'en');
+      if (!lastNews || !lastNews.generated_at || lastNews.generated_at.slice(0, 10) !== today) {
+        console.log('[AI] Scheduled news summary analysis starting...');
+        await runNewsSummaryAiBothLanguages();
+      }
     }
 
     // Monthly: last day of month at 23:xx
@@ -1821,7 +1961,7 @@ function scheduleAiAnalysis() {
     }
   }, 30 * 60 * 1000); // Check every 30 minutes
 
-  console.log('[AI] Analysis scheduled: daily (06:00), weekly (Sunday 23:59), monthly (last day 23:59), Patch Tuesday (00:01 on PT day)');
+  console.log('[AI] Analysis scheduled: daily (06:00), weekly (Sunday 23:59), monthly (last day 23:59), Patch Tuesday (00:01 on PT day), news summary (Sunday 23:xx)');
 }
 
 // =========================================================================
