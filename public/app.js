@@ -186,6 +186,12 @@ function selectResolutionItems(items, minCount){
 // Shared helper: extract CVE-YYYY-NNNN id from an item (returns '' if not found)
 function extractCveId(it) {
   if (!it) return '';
+  // check explicit id fields first (handles slim format and direct id)
+  const raw = it.id || it.CVE || it.cve || '';
+  if (raw) {
+    const m2 = String(raw).match(/CVE-\d{4}-\d{4,7}/i);
+    if (m2) return m2[0].toUpperCase();
+  }
   if (it.cveMetadata && it.cveMetadata.cveId) return it.cveMetadata.cveId.toUpperCase();
   // explicit aliases array (OSV/GHSA) may contain CVE identifiers
   try {
@@ -197,18 +203,12 @@ function extractCveId(it) {
       }
     }
   } catch (e) { /* ignore */ }
-  // scan full JSON for CVE pattern as a fallback
+  // scan full JSON for CVE pattern as a last resort fallback
   try {
     const s = JSON.stringify(it);
     const m = s.match(/CVE-\d{4}-\d{4,7}/i);
     if (m) return m[0].toUpperCase();
   } catch (e) { /* ignore */ }
-  // check explicit id fields
-  const raw = it.id || it.CVE || it.cve || '';
-  if (raw) {
-    const m2 = String(raw).match(/CVE-\d{4}-\d{4,7}/i);
-    if (m2) return m2[0].toUpperCase();
-  }
   return '';
 }
 

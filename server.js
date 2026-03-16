@@ -508,6 +508,28 @@ async function pollKev() {
 // =========================================================================
 //  CVE ENRICHMENT (extract vendor, discovered, exploit/patch from data)
 // =========================================================================
+// Vendor blocklist (module-scoped, created once)
+const VENDOR_BLOCKLIST = new Set([
+  'chrome-cve-admin','security_alert','security-advisories','security','audit',
+  'cna','disclosure','psirt','secure','vulnerabilities','vulnerability','scy',
+  'cve-coordination','ics-cert','cybersecurity','infosec','product-security',
+  'productsecurity','product-cve','csirt','cert-in','certcc','sirt','prodsec',
+  'secalert','secalert_us','responsibledisclosure','vulnreport','reachout',
+  'contact','info','support','nvd','nist','zdi-disclosures','cvd','n/a',
+  'openclaw','open-emr','oretnom23','fabian','iletisim','gfi','nsasoft',
+  'vulncheck','patchstack','wordfence','hackerone','rapid7','snyk','tenable',
+  'trendmicro','qualys','checkmarx','sonatype','portswigger','acunetix',
+  'beyondtrust','securin','appcheck','vdiscover','idefense','flexera',
+  'veracode','mend','whitesource','incibe','jpcert','kcirt','krcert',
+  'mitre','github',
+  'the','this','that','shared','progress','with','from','for','and',
+  'not','was','has','had','are','were','been','being','have','does',
+  'its','all','any','each','every','some','other','another','such',
+  'cross-site','improper','missing','multiple','remote','local','use',
+  'sql','buffer','stack','heap','integer','null','type','path','file',
+  'server','client','user','admin','system','network','web','application'
+]);
+
 function enrichCveItem(id, item) {
   const enrichment = {};
 
@@ -526,28 +548,6 @@ function enrichCveItem(id, item) {
 
   // Vendor extraction
   try {
-    const VENDOR_BLOCKLIST = new Set([
-      'chrome-cve-admin','security_alert','security-advisories','security','audit',
-      'cna','disclosure','psirt','secure','vulnerabilities','vulnerability','scy',
-      'cve-coordination','ics-cert','cybersecurity','infosec','product-security',
-      'productsecurity','product-cve','csirt','cert-in','certcc','sirt','prodsec',
-      'secalert','secalert_us','responsibledisclosure','vulnreport','reachout',
-      'contact','info','support','nvd','nist','zdi-disclosures','cvd','n/a',
-      'openclaw','open-emr','oretnom23','fabian','iletisim','gfi','nsasoft',
-      // Known CNAs (CVE Numbering Authorities) — not actual software vendors
-      'vulncheck','patchstack','wordfence','hackerone','rapid7','snyk','tenable',
-      'trendmicro','qualys','checkmarx','sonatype','portswigger','acunetix',
-      'beyondtrust','securin','appcheck','vdiscover','idefense','flexera',
-      'veracode','mend','whitesource','incibe','jpcert','kcirt','krcert',
-      'mitre','github',
-      // Common English stopwords that leak through as vendor names
-      'the','this','that','shared','progress','with','from','for','and',
-      'not','was','has','had','are','were','been','being','have','does',
-      'its','all','any','each','every','some','other','another','such',
-      'cross-site','improper','missing','multiple','remote','local','use',
-      'sql','buffer','stack','heap','integer','null','type','path','file',
-      'server','client','user','admin','system','network','web','application'
-    ]);
     function isValidVendor(v) {
       if (!v || v.length <= 2 || v.length > 30) return false;
       if (VENDOR_BLOCKLIST.has(v.toLowerCase())) return false;
@@ -742,6 +742,7 @@ function simplify(item) {
 // =========================================================================
 const _geoIpCache = new Map();
 const GEO_IP_TTL = 60 * 60 * 1000; // 1 hour
+const GEO_IP_MAX_SIZE = 500; // cap cache size
 
 async function lookupGeoIp(ip) {
   // Skip lookup for private/reserved IPs (Docker bridge, localhost, etc.)
@@ -759,11 +760,30 @@ async function lookupGeoIp(ip) {
     const data = await r.json();
     if (data && data.status === 'success') {
       const result = { countryCode: data.countryCode };
+      if (_geoIpCache.size >= GEO_IP_MAX_SIZE) {
+        // Evict oldest entry
+        const firstKey = _geoIpCache.keys().next().value;
+        _geoIpCache.delete(firstKey);
+      }
       _geoIpCache.set(ip, { ts: Date.now(), data: result });
       return result;
     }
   } catch (e) {}
   return { countryCode: '' };
+}
+
+// =========================================================================
+//  API RESPONSE CACHE (short TTL to avoid redundant DB queries)
+// =========================================================================
+const _apiCache = new Map();
+function cachedJson(res, key, ttlMs, computeFn) {
+  const cached = _apiCache.get(key);
+  if (cached && Date.now() - cached.ts < ttlMs) {
+    return res.json(cached.data);
+  }
+  const data = computeFn();
+  _apiCache.set(key, { ts: Date.now(), data });
+  return res.json(data);
 }
 
 // =========================================================================
@@ -785,8 +805,8 @@ app.get('/api/cves', (req, res) => {
   const count = Math.min(parseInt(req.query.count || '50', 10), 200);
   const offset = parseInt(req.query.offset || '0', 10);
   const cvssMin = req.query.cvssMin ? parseFloat(req.query.cvssMin) : null;
-  const cves = db.getCvesFiltered(count, offset, cvssMin);
-  res.json(cves);
+  const cacheKey = 'cves:' + count + ':' + offset + ':' + (cvssMin || '');
+  cachedJson(res, cacheKey, 30000, () => db.getCvesFiltered(count, offset, cvssMin));
 });
 
 // Search CVEs in database
@@ -978,11 +998,11 @@ app.get('/api/cve/:id', async (req, res) => {
 // CVE daily stats
 app.get('/api/cve-stats', (req, res) => {
   try {
-    const rows = db.getCveDailyCounts(30);
-    if (rows.length > 0) return res.json(rows);
-    // fallback: compute from stored CVEs
-    const counts = computeCveCountsFromDb();
-    res.json(counts);
+    cachedJson(res, 'cve-stats', 60000, () => {
+      const rows = db.getCveDailyCounts(30);
+      if (rows.length > 0) return rows;
+      return computeCveCountsFromDb();
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1057,20 +1077,23 @@ app.get('/api/report', (req, res) => {
     const days = period === 'week' ? 7 : period === 'yesterday' ? 1 : 30;
     const vendorParam = req.query.vendor || null;
     const vendor = vendorParam ? vendorParam.split(',').map(v => v.trim()).filter(Boolean) : null;
-    const stats = db.getReportStats(days, vendor);
-    const topVendors = vendor ? db.getTopVendorsWithBreakdown(days, vendor.length, vendor) : db.getTopVendorsWithBreakdown(days, 8);
-    const kevCves = db.getReportCves({ days, kevOnly: true, vendor });
-    const highNoPatch = db.getReportCves({ days, minCvss: 8, noPatchOnly: true, limit: 50, vendor });
-    const critWithPatch = db.getReportCves({ days, minCvss: 9, patchOnly: true, limit: 50, vendor });
-    res.json({
-      period,
-      days,
-      generatedAt: new Date().toISOString(),
-      stats,
-      topVendors,
-      kevCves: kevCves.map(simplify),
-      highNoPatch: highNoPatch.map(simplify),
-      critWithPatch: critWithPatch.map(simplify)
+    const cacheKey = 'report:' + period + ':' + (vendor ? vendor.sort().join(',') : '');
+    cachedJson(res, cacheKey, 30000, () => {
+      const stats = db.getReportStats(days, vendor);
+      const topVendors = vendor ? db.getTopVendorsWithBreakdown(days, vendor.length, vendor) : db.getTopVendorsWithBreakdown(days, 8);
+      const kevCves = db.getReportCves({ days, kevOnly: true, vendor });
+      const highNoPatch = db.getReportCves({ days, minCvss: 8, noPatchOnly: true, limit: 50, vendor });
+      const critWithPatch = db.getReportCves({ days, minCvss: 9, patchOnly: true, limit: 50, vendor });
+      return {
+        period,
+        days,
+        generatedAt: new Date().toISOString(),
+        stats,
+        topVendors,
+        kevCves: kevCves.map(simplify),
+        highNoPatch: highNoPatch.map(simplify),
+        critWithPatch: critWithPatch.map(simplify)
+      };
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1081,8 +1104,7 @@ app.get('/api/report', (req, res) => {
 app.get('/api/vendors', (req, res) => {
   try {
     const days = req.query.days ? parseInt(req.query.days, 10) : 30;
-    const vendors = db.getVendorList(Math.min(days, 365));
-    res.json(vendors);
+    cachedJson(res, 'vendors:' + days, 60000, () => db.getVendorList(Math.min(days, 365)));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1581,6 +1603,10 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   // Generate initial report
   generateReport();
 
+  // DB maintenance: trim oversized blobs and reclaim space
+  db.trimOversizedBlobs();
+  db.vacuum();
+
   // Fast service polls for UI responsiveness
   await pollMicrosoftFast().catch(() => {});
   await pollCloudflareAws().catch(() => {});
@@ -1611,6 +1637,9 @@ const PORT = settings.server.port || process.env.PORT || 3000;
     setTimeout(() => {
       enrichExistingCves();
       generateReport();
+      db.trimOversizedBlobs();
+      // Weekly vacuum on Sundays
+      if (new Date().getDay() === 0) db.vacuum();
       // Reschedule for next day
       setInterval(() => { enrichExistingCves(); generateReport(); }, 24 * 60 * 60 * 1000);
     }, ms);

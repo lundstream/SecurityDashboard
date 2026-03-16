@@ -96,6 +96,132 @@ function initTables() {
       generated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  // --- Indexes for query performance ---
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_cves_published ON cves(published)`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_cves_cvss ON cves(cvss_score)`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_cves_vendor ON cves(vendor COLLATE NOCASE)`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_cves_kev ON cves(kev)`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_news_pub_date ON news(pub_date)`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_news_source ON news(source)`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_kev_date_added ON kev(date_added)`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_ai_period_lang ON ai_analysis(period, language, generated_at)`);
+}
+
+// --- CVE slim helper (extract only fields the frontend needs) ---
+function slimCve(row) {
+  let obj;
+  try { obj = JSON.parse(row.data); } catch (e) { obj = {}; }
+
+  // --- extract ID ---
+  let cveId = row.id || '';
+
+  // --- extract title ---
+  let title = '';
+  if (obj.title) title = obj.title;
+  else if (obj.summary && obj.summary.length < 140) title = obj.summary;
+  else if (obj.cveMetadata && obj.cveMetadata.title) title = obj.cveMetadata.title;
+  else if (Array.isArray(obj.descriptions) && obj.descriptions.length) {
+    const d = obj.descriptions.find(d => d.lang === 'en') || obj.descriptions[0];
+    if (d && d.value && d.value.length < 140) title = d.value;
+  }
+  if (!title && obj.containers && obj.containers.cna) {
+    const cna = obj.containers.cna;
+    if (cna.title) title = cna.title;
+    else if (cna.descriptions && cna.descriptions.length) {
+      const d = cna.descriptions[0];
+      title = d.title || d.value || d.description || '';
+      if (title.length < 140) { /* keep as title */ } else title = '';
+    }
+  }
+  if (!title && obj.document && obj.document.title) title = obj.document.title;
+
+  // --- extract description/summary ---
+  let summary = '';
+  if (obj.details) summary = obj.details;
+  else if (obj.description) summary = typeof obj.description === 'string' ? obj.description : '';
+  else if (obj.summary) summary = obj.summary;
+  else if (Array.isArray(obj.descriptions) && obj.descriptions.length) {
+    const d = obj.descriptions.find(d => d.lang === 'en') || obj.descriptions[0];
+    if (d && d.value) summary = d.value;
+  }
+  if (!summary && obj.containers && obj.containers.cna) {
+    const cna = obj.containers.cna;
+    if (cna.descriptions && cna.descriptions.length) {
+      const desc = cna.descriptions[0];
+      summary = desc.value || desc.description || desc.text || '';
+    } else if (typeof cna.descriptions === 'string') summary = cna.descriptions;
+    else if (cna.title && !summary) summary = cna.title;
+  }
+  if (!summary && obj.document && obj.document.notes && obj.document.notes.length) {
+    const note = obj.document.notes.find(n => n.category === 'summary') || obj.document.notes[0];
+    if (note) summary = note.text || note.title || note.summary || '';
+  }
+  // Truncate summary to 500 chars server-side (frontend truncates to 300 anyway)
+  if (summary.length > 500) summary = summary.slice(0, 500);
+
+  // --- extract CVSS ---
+  let cvss = row.cvss_score != null ? row.cvss_score : null;
+  if (cvss == null) {
+    cvss = extractCvssFromObj(obj);
+  }
+
+  // --- extract published date ---
+  let published = row.published || null;
+  if (!published) {
+    published = obj.Published || obj.published ||
+      (obj.cveMetadata && (obj.cveMetadata.datePublished || obj.cveMetadata.dateUpdated)) ||
+      (obj.document && obj.document.tracking && (obj.document.tracking.current_release_date || obj.document.tracking.initial_release_date)) ||
+      null;
+  }
+
+  return {
+    id: cveId,
+    title: title || '',
+    summary: summary || '',
+    cvss: cvss,
+    published: published,
+    url: obj.url || '',
+    _kev: row.kev || 0,
+    _exploit: row.has_exploit || 0,
+    _patch: row.has_patch || 0,
+    _vendor: row.vendor || '',
+    _discovered: row.discovered || ''
+  };
+}
+
+// Extract CVSS score from parsed CVE object (server-side mirror of frontend logic)
+function extractCvssFromObj(it) {
+  if (!it) return null;
+  if (typeof it.cvss === 'number') return it.cvss;
+  if (it.cvss && !isNaN(Number(it.cvss))) return Number(it.cvss);
+  if (it.cvss3 && it.cvss3.baseScore) return Number(it.cvss3.baseScore);
+  try {
+    if (it.metrics) {
+      const m = it.metrics;
+      if (m.cvssMetricV31 && m.cvssMetricV31.length) return Number(m.cvssMetricV31[0].cvssData.baseScore);
+      if (m.cvssMetricV40 && m.cvssMetricV40.length) return Number(m.cvssMetricV40[0].cvssData.baseScore);
+      if (m.cvssMetricV30 && m.cvssMetricV30.length) return Number(m.cvssMetricV30[0].cvssData.baseScore);
+      if (m.cvssMetricV2 && m.cvssMetricV2.length) return Number(m.cvssMetricV2[0].cvssData.baseScore);
+    }
+  } catch (e) {}
+  try {
+    const cont = it.containers || null;
+    if (cont) {
+      const sources = [].concat(cont.adp || [], cont.cna ? [cont.cna] : []);
+      for (const a of sources) {
+        if (a.metrics && a.metrics.length) {
+          for (const m of a.metrics) {
+            if (m.cvssV4_0 && m.cvssV4_0.baseScore) return Number(m.cvssV4_0.baseScore);
+            if (m.cvssV3_1 && m.cvssV3_1.baseScore) return Number(m.cvssV3_1.baseScore);
+            if (m.cvssV3 && m.cvssV3.baseScore) return Number(m.cvssV3.baseScore);
+            if (m.cvssV3_0 && m.cvssV3_0.baseScore) return Number(m.cvssV3_0.baseScore);
+          }
+        }
+      }
+    }
+  } catch (e) {}
+  return null;
 }
 
 // --- CVE helpers ---
@@ -120,29 +246,13 @@ function upsertCve(id, data, published, cvssScore, enrichment) {
 
 function getCves(count, offset) {
   const d = getDb();
-  return d.prepare(`SELECT data, kev, has_exploit, has_patch, vendor, discovered FROM cves ORDER BY published DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(count, offset).map(r => {
-    const obj = JSON.parse(r.data);
-    obj._kev = r.kev || 0;
-    obj._exploit = r.has_exploit || 0;
-    obj._patch = r.has_patch || 0;
-    obj._vendor = r.vendor || '';
-    obj._discovered = r.discovered || '';
-    return obj;
-  });
+  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered FROM cves ORDER BY published DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(count, offset).map(slimCve);
 }
 
 function getCvesFiltered(count, offset, cvssMin) {
   const d = getDb();
   if (!cvssMin || isNaN(cvssMin)) return getCves(count, offset);
-  return d.prepare(`SELECT data, kev, has_exploit, has_patch, vendor, discovered FROM cves WHERE cvss_score IS NOT NULL AND cvss_score >= ? ORDER BY published DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(cvssMin, count, offset).map(r => {
-    const obj = JSON.parse(r.data);
-    obj._kev = r.kev || 0;
-    obj._exploit = r.has_exploit || 0;
-    obj._patch = r.has_patch || 0;
-    obj._vendor = r.vendor || '';
-    obj._discovered = r.discovered || '';
-    return obj;
-  });
+  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered FROM cves WHERE cvss_score IS NOT NULL AND cvss_score >= ? ORDER BY published DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(cvssMin, count, offset).map(slimCve);
 }
 
 function getCveCount() {
@@ -407,21 +517,58 @@ function getRecentNews(days) {
 function searchCves(query, limit) {
   const d = getDb();
   const like = '%' + query + '%';
-  return d.prepare(`SELECT data, kev, has_exploit, has_patch, vendor, discovered FROM cves WHERE id LIKE ? OR vendor LIKE ? OR data LIKE ? ORDER BY published DESC LIMIT ?`).all(like, like, like, limit).map(r => {
-    const obj = JSON.parse(r.data);
-    obj._kev = r.kev || 0;
-    obj._exploit = r.has_exploit || 0;
-    obj._patch = r.has_patch || 0;
-    obj._vendor = r.vendor || '';
-    obj._discovered = r.discovered || '';
-    return obj;
-  });
+  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered FROM cves WHERE id LIKE ? OR vendor LIKE ? ORDER BY published DESC LIMIT ?`).all(like, like, limit).map(slimCve);
 }
 
 function searchNews(query, limit) {
   const d = getDb();
   const like = '%' + query + '%';
   return d.prepare(`SELECT title, link, pub_date as pubDate, source FROM news WHERE title LIKE ? OR source LIKE ? ORDER BY pub_date DESC LIMIT ?`).all(like, like, limit);
+}
+
+// --- Maintenance ---
+function vacuum() {
+  const d = getDb();
+  try {
+    d.pragma('wal_checkpoint(TRUNCATE)');
+    d.exec('VACUUM');
+    console.log('DB maintenance: VACUUM + WAL checkpoint complete');
+  } catch (e) {
+    console.error('DB maintenance error:', e.message);
+  }
+}
+
+function trimOversizedBlobs(maxBytes) {
+  maxBytes = maxBytes || 500000; // 500 KB default
+  const d = getDb();
+  const rows = d.prepare('SELECT id, LENGTH(data) as len FROM cves WHERE LENGTH(data) > ?').all(maxBytes);
+  if (rows.length === 0) return 0;
+  const stmt = d.prepare('UPDATE cves SET data = ? WHERE id = ?');
+  let trimmed = 0;
+  for (const row of rows) {
+    try {
+      const raw = d.prepare('SELECT data FROM cves WHERE id = ?').get(row.id);
+      const obj = JSON.parse(raw.data);
+      // Strip heavy nested data, keep essential fields
+      const slim = {
+        id: obj.id, descriptions: obj.descriptions,
+        metrics: obj.metrics, references: obj.references,
+        configurations: obj.configurations,
+        containers: obj.containers ? {
+          cna: obj.containers.cna ? {
+            affected: obj.containers.cna.affected,
+            references: obj.containers.cna.references,
+            descriptions: obj.containers.cna.descriptions,
+            metrics: obj.containers.cna.metrics
+          } : undefined
+        } : undefined
+      };
+      stmt.run(JSON.stringify(slim), row.id);
+      trimmed++;
+    } catch (e) {}
+  }
+  if (trimmed > 0) console.log(`DB maintenance: trimmed ${trimmed} oversized CVE blobs (>${(maxBytes/1024).toFixed(0)} KB)`);
+  return trimmed;
 }
 
 module.exports = {
@@ -434,5 +581,6 @@ module.exports = {
   saveReport, getLatestReport, getReportCves, getReportStats, getTopVendors, getTopVendorsWithBreakdown, getVendorList,
   saveAiAnalysis, getLatestAiAnalysis, getRecentNews,
   searchCves, searchNews,
-  closeDb
+  closeDb,
+  vacuum, trimOversizedBlobs
 };
