@@ -2032,15 +2032,36 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   // AI analysis scheduling
   scheduleAiAnalysis();
 
-  // Run AI analysis on boot if runOnBoot is set to 1
-  if (aiConfig.enabled && (aiConfig.runOnBoot === 1 || aiConfig.runOnBoot === true)) {
-    console.log('[AI] runOnBoot enabled — triggering all analyses...');
-    runAiAnalysisBothLanguages('yesterday')
-      .then(() => runAiAnalysisBothLanguages('week'))
-      .then(() => runAiAnalysisBothLanguages('month'))
-      .then(() => runPatchTuesdayAiBothLanguages())
-      .then(() => runNewsSummaryAiBothLanguages())
-      .catch(e => console.error('[AI] Boot analysis error:', e.message));
+  // Run AI analysis on boot if runOnBoot is set, or fill in any missing analyses
+  if (aiConfig.enabled) {
+    const runAll = aiConfig.runOnBoot === 1 || aiConfig.runOnBoot === true;
+    const missing = [];
+    const reportPeriods = ['yesterday', 'week', 'month'];
+    for (const p of reportPeriods) {
+      for (const lang of ['en', 'sv']) {
+        if (runAll || !db.getLatestAiAnalysis(p, lang)) {
+          if (!missing.some(m => m.type === 'report' && m.period === p)) missing.push({ type: 'report', period: p });
+        }
+      }
+    }
+    for (const t of ['patchtuesday', 'newssummary']) {
+      for (const lang of ['en', 'sv']) {
+        if (runAll || !db.getLatestAiAnalysis(t, lang)) {
+          if (!missing.some(m => m.type === t)) missing.push({ type: t });
+          break;
+        }
+      }
+    }
+    if (missing.length > 0) {
+      console.log(`[AI] ${runAll ? 'runOnBoot enabled' : 'Missing analyses found'} — running: ${missing.map(m => m.period || m.type).join(', ')}`);
+      let chain = Promise.resolve();
+      for (const m of missing) {
+        if (m.type === 'report') chain = chain.then(() => runAiAnalysisBothLanguages(m.period));
+        else if (m.type === 'patchtuesday') chain = chain.then(() => runPatchTuesdayAiBothLanguages());
+        else if (m.type === 'newssummary') chain = chain.then(() => runNewsSummaryAiBothLanguages());
+      }
+      chain.catch(e => console.error('[AI] Boot analysis error:', e.message));
+    }
   }
 
   app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
