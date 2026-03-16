@@ -1224,10 +1224,11 @@ function buildPatchTuesdayAiPrompt(language) {
     ? 'Write the ENTIRE response in Swedish. All section headers and body text must be in Swedish. Keep CVE IDs and vendor names in their original English form.'
     : 'Write the response in English.';
 
-  return `You are a senior IT security analyst specializing in Microsoft Patch Tuesday analysis. This analysis covers the Patch Tuesday of ${currentPtStr}. The next Patch Tuesday after this is ${nextPtStr}.
+  return `You are a senior IT security analyst specializing in Microsoft Patch Tuesday analysis.
+IMPORTANT: This analysis is for the CURRENT Patch Tuesday cycle (${currentPtStr}), which has already occurred. Do NOT write about upcoming or future Patch Tuesdays. Do NOT use phrases like "pre-patch", "upcoming", "what to expect", or "prepare for". Write as if the patches have been released and IT teams need to act NOW.
 ${langInstruction}
 
-Provide a thorough Patch Tuesday briefing based on the current threat landscape. This should help IT administrators understand what was released and act on the patches for this cycle.
+Provide a thorough Patch Tuesday briefing for the ${currentPtStr} cycle. This should help IT administrators understand what was released and act on the patches immediately.
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
 
@@ -1255,8 +1256,7 @@ Provide 5-8 specific, actionable recommendations for IT administrators to act on
 Aim for approximately 1200-1500 words. Be specific and reference actual CVE IDs from the data. Focus on Microsoft products but mention other critical vendors if relevant.
 
 --- DATA ---
-CURRENT PATCH TUESDAY: ${currentPtStr}
-NEXT PATCH TUESDAY: ${nextPtStr}
+THIS PATCH TUESDAY (analyze this one): ${currentPtStr}
 STATS (last 30 days): ${stats.total} total CVEs, ${stats.critical} critical (CVSS>=9), ${stats.kevCount} known exploited
 
 TOP VENDORS:
