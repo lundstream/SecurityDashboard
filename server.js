@@ -1374,66 +1374,38 @@ app.post('/api/patchtuesday/analyze', (req, res) => {
 function buildNewsSummaryAiPrompt(language) {
   language = language || 'en';
 
-  const news = db.getRecentNews(7);
-  const stats = db.getReportStats(7);
-  const kevCves = db.getReportCves({ days: 7, kevOnly: true }).map(simplify);
-
-  const newsSummary = news.map(n =>
-    `  [${n.source}] ${n.title}${n.link ? ' — ' + n.link : ''}`
-  ).join('\n');
-
-  const kevSummary = kevCves.slice(0, 10).map(c =>
-    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 120)}`
-  ).join('\n');
-
   const langInstruction = language === 'sv'
     ? 'Write the ENTIRE response in Swedish. All section headers and body text must be in Swedish.'
     : 'Write the response in English.';
 
   const today = localDateStr(new Date());
 
-  return `You are a senior IT analyst writing a weekly news briefing for Swedish IT consultants.
+  return `You are a senior IT analyst writing a weekly news briefing for Swedish IT consultants. You have access to current news from the web.
 ${langInstruction}
 
 Today's date is ${today}.
 
-The target audience is IT consultants working in Sweden. Focus on the biggest IT and cybersecurity news from the past week, with emphasis on Swedish sources such as CERT-SE, Computer Sweden and Dagens teknik. This is NOT a CVE report — keep CVE references to a minimum and only mention them when they are directly tied to a major news story. This should feel like a news summary / omvärldsanalys, not a vulnerability bulletin.
+The target audience is IT consultants working in Sweden. Write from a Swedish perspective. Focus on the biggest IT and cybersecurity news from the past week, prioritizing Swedish and Nordic sources such as CERT-SE, Computer Sweden, Dagens teknik, MSB, The Register, BleepingComputer, Krebs on Security, and The Record. This is NOT a CVE report — keep CVE references to a minimum and only mention them when they are directly tied to a major news story. This should feel like a news summary / omvärldsanalys, not a vulnerability bulletin.
 
 IMPORTANT: Do NOT start with a title, heading, date line, or introduction. Jump straight into the first section header.
 IMPORTANT: Do NOT use numbered lists anywhere. Use bullet lists (- ) for all lists.
-IMPORTANT: When referencing news stories, include source links using markdown link format [source name](URL). Use the actual article URLs provided in the DATA section below. Do NOT invent or guess URLs — only link to URLs that appear in the data. If no URL is available for a story, do not link it. Do NOT reference sources that are not present in the DATA section.
-IMPORTANT: Prioritize Swedish and Nordic sources when available.
+IMPORTANT: Include source links for EVERY news story and claim using markdown link format [source name](URL). Use real, verifiable article URLs. Every bullet point must have at least one source link.
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
 
 ## ${language === 'sv' ? 'Veckans viktigaste IT-nyheter' : "This Week's Top IT News"}
-Summarize exactly 5 of the biggest IT and cybersecurity news stories of the week. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends. Write 2-4 sentences per story explaining what happened and why it matters. Include source links. Use bullet list format (- **Title**: description).
-
-## ${language === 'sv' ? 'Svenska perspektivet' : 'Swedish Perspective'}
-Highlight any news particularly relevant to Sweden and Nordic countries. Include CERT-SE advisories, MSB communications, Swedish government IT decisions, or incidents affecting Swedish organizations. If nothing Sweden-specific happened, discuss how global events impact Swedish IT infrastructure or organizations.
+List exactly 10 of the biggest IT and cybersecurity news stories of the past week from a Swedish perspective. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends. Write 2-3 sentences per story explaining what happened and why it matters for Swedish IT professionals. Include source links for each story. Use bullet list format (- **Title**: description).
 
 ## ${language === 'sv' ? 'Branschtrender och utveckling' : 'Industry Trends & Developments'}
-Cover notable technology trends, AI developments, cloud/infrastructure changes, regulatory updates (NIS2, GDPR enforcement, EU Cyber Resilience Act), and market movements relevant to IT consultants. Focus on what consultants need to know to advise their clients.
+Cover notable technology trends, AI developments, cloud/infrastructure changes, regulatory updates (NIS2, GDPR enforcement, EU Cyber Resilience Act), and market movements relevant to IT consultants. Focus on what consultants need to know to advise their clients. Include source links.
 
 ## ${language === 'sv' ? 'Hot och aktörer' : 'Threats & Actors'}
-Brief overview of notable threat actor activity, ransomware campaigns, phishing trends, or supply chain attacks from the week. Keep it high-level and actionable — what should IT consultants warn their clients about?
-
-## ${language === 'sv' ? 'Rekommendationer för IT-konsulter' : 'Recommendations for IT Consultants'}
-Provide 4-6 specific, actionable takeaways as a bullet list. What should they discuss with clients? What actions should be prioritized?
+Brief overview of notable threat actor activity, ransomware campaigns, phishing trends, or supply chain attacks from the week. Keep it high-level and actionable — what should IT consultants warn their clients about? Include source links.
 
 ## ${language === 'sv' ? 'Källor' : 'Sources'}
-List ONLY sources that were actually referenced in this briefing AND that have article URLs from the DATA section. Do not list sources you did not use or that are not in the data.
+List all sources referenced in this briefing with their article URLs as markdown links.
 
-Aim for approximately 1000-1300 words. Be informative and professional. Write from a Swedish IT industry perspective even when discussing global events.
-
---- DATA ---
-RECENT SECURITY NEWS (last 7 days):
-${newsSummary || '  No news available'}
-
-VULNERABILITY CONTEXT (last 7 days): ${stats.total} total CVEs, ${stats.critical} critical, ${stats.kevCount} known exploited
-
-KNOWN EXPLOITED VULNERABILITIES (for context only — don't make this the focus):
-${kevSummary || '  None this week'}`;
+Aim for approximately 1200-1600 words. Be informative and professional. Write from a Swedish IT industry perspective even when discussing global events.`;
 }
 
 async function runNewsSummaryAiAnalysis(language) {
