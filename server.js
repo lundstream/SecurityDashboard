@@ -1388,13 +1388,13 @@ Today's date is ${today}.
 The target audience is IT consultants working in Sweden. Write from a Swedish perspective. Focus on the biggest IT and cybersecurity news from the past week, prioritizing Swedish and Nordic sources such as CERT-SE, Computer Sweden, Dagens teknik, MSB, The Register, BleepingComputer, Krebs on Security, and The Record. This is NOT a CVE report — keep CVE references to a minimum and only mention them when they are directly tied to a major news story. This should feel like a news summary / omvärldsanalys, not a vulnerability bulletin.
 
 IMPORTANT: Do NOT start with a title, heading, date line, or introduction. Jump straight into the first section header.
-IMPORTANT: Do NOT use numbered lists anywhere. Use bullet lists (- ) for all lists.
-IMPORTANT: Include source links for EVERY news story and claim using markdown link format [source name](URL). Use real, verifiable article URLs. Every bullet point must have at least one source link.
+IMPORTANT: Write in flowing prose paragraphs, not bullet lists. Use bullet lists only when listing specific items (e.g. a list of tools, patches, or recommendations). The main news coverage should read like a professional news briefing with paragraphs, not a bullet-point summary.
+IMPORTANT: Include source links for EVERY news story and claim using markdown link format [source name](URL). Use real, verifiable article URLs. Weave source links naturally into the text.
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
 
 ## ${language === 'sv' ? 'Veckans viktigaste IT-nyheter' : "This Week's Top IT News"}
-List exactly 10 of the biggest IT and cybersecurity news stories of the past week from a Swedish perspective. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends. Write 2-3 sentences per story explaining what happened and why it matters for Swedish IT professionals. Include source links for each story. Use bullet list format (- **Title**: description).
+Cover the 10 biggest IT and cybersecurity news stories of the past week from a Swedish perspective. Use ### subheadings for each story, followed by a paragraph of 2-4 sentences explaining what happened and why it matters for Swedish IT professionals. Include source links within the text. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends.
 
 ## ${language === 'sv' ? 'Branschtrender och utveckling' : 'Industry Trends & Developments'}
 Cover notable technology trends, AI developments, cloud/infrastructure changes, regulatory updates (NIS2, GDPR enforcement, EU Cyber Resilience Act), and market movements relevant to IT consultants. Focus on what consultants need to know to advise their clients. Include source links.
