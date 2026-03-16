@@ -164,9 +164,21 @@ function mdToHtml(md) {
 }
 
 function inlineMd(text) {
-  let s = escapeHtml(text);
+  // Extract markdown links before escaping
+  const links = [];
+  let s = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    const i = links.length;
+    links.push({ label, url });
+    return '\x00LINK' + i + '\x00';
+  });
+  s = escapeHtml(s);
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/`(.+?)`/g, '<code>$1</code>');
+  // Restore links
+  s = s.replace(/\x00LINK(\d+)\x00/g, (_, i) => {
+    const l = links[Number(i)];
+    return '<a href="' + escapeHtml(l.url).replace(/&amp;/g, '&') + '" target="_blank" rel="noopener">' + escapeHtml(l.label) + '</a>';
+  });
   s = s.replace(/\b(CVE-\d{4}-\d{4,})\b/g, '<a href="https://nvd.nist.gov/vuln/detail/$1" target="_blank" rel="noopener">$1</a>');
   return s;
 }

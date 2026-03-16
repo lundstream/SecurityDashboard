@@ -1390,15 +1390,21 @@ function buildNewsSummaryAiPrompt(language) {
     ? 'Write the ENTIRE response in Swedish. All section headers and body text must be in Swedish.'
     : 'Write the response in English.';
 
+  const today = localDateStr(new Date());
+
   return `You are a senior IT analyst writing a weekly news briefing for Swedish IT consultants.
 ${langInstruction}
 
+Today's date is ${today}. Do NOT use placeholders like "[Insert Date]" — use the actual date provided.
+
 The target audience is IT consultants working in Sweden. Focus on the biggest IT and cybersecurity news from the past week. This is NOT a CVE report — keep CVE references to a minimum and only mention them when they are directly tied to a major news story. This should feel like a news summary / omvärldsanalys, not a vulnerability bulletin.
+
+IMPORTANT: When referencing news stories, include source links using markdown link format [source name](URL). Use real, well-known URLs for the sources (e.g. BleepingComputer, The Record, CERT-SE, Krebs on Security, The Register, etc.). Reference the source when discussing specific events.
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
 
 ## ${language === 'sv' ? 'Veckans viktigaste IT-nyheter' : "This Week's Top IT News"}
-Summarize the 3-5 biggest IT and cybersecurity news stories of the week. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends. Write 2-4 sentences per story explaining what happened and why it matters.
+Summarize the 3-5 biggest IT and cybersecurity news stories of the week. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends. Write 2-4 sentences per story explaining what happened and why it matters. Include source links.
 
 ## ${language === 'sv' ? 'Svenska perspektivet' : 'Swedish Perspective'}
 Highlight any news particularly relevant to Sweden and Nordic countries. Include CERT-SE advisories, MSB communications, Swedish government IT decisions, or incidents affecting Swedish organizations. If nothing Sweden-specific happened, discuss how global events impact Swedish IT infrastructure or organizations.
@@ -1411,6 +1417,9 @@ Brief overview of notable threat actor activity, ransomware campaigns, phishing 
 
 ## ${language === 'sv' ? 'Rekommendationer för IT-konsulter' : 'Recommendations for IT Consultants'}
 Provide 4-6 specific, actionable takeaways for IT consultants. What should they discuss with clients? What actions should be prioritized? What trends should they be aware of?
+
+## ${language === 'sv' ? 'Källor' : 'Sources'}
+List the key sources referenced in this briefing with markdown links.
 
 Aim for approximately 1000-1300 words. Be informative and professional. Write from a Swedish IT industry perspective even when discussing global events.
 
