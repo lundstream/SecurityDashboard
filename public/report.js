@@ -32,7 +32,8 @@ function renderCveCard(cve) {
   const published = fmtDate(cve.published);
   const discovered = cve.discovered ? fmtDate(cve.discovered) : '';
   const summary = escapeHtml(cve.summary || 'No description available');
-  const truncated = summary.length > 250 ? summary.slice(0, 250).replace(/\s+\S*$/, '') + '\u2026' : summary;
+  const isTruncated = summary.length > 250;
+  const truncated = isTruncated ? summary.slice(0, 250).replace(/\s+\S*$/, '') + '\u2026' : summary;
 
   const kevBadge = cve.kev ? '<span class="badge badge-kev">KEV</span>' : '';
   const exploitBadge = cve.exploit ? '<span class="badge badge-exploit">Exploit</span>' : '<span class="badge badge-no">No exploit</span>';
@@ -46,7 +47,7 @@ function renderCveCard(cve) {
     <div><a href="${url}" target="_blank" rel="noopener">${id}</a>${vendorHtml}</div>
     <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • ${discoveredHtml}Published: ${published}</div>
     <div class="cve-badges">${exploitBadge} ${patchBadge} ${kevBadge}</div>
-    <div class="desc">${truncated}</div>
+    <div class="desc">${isTruncated ? `<span class="desc-short">${truncated}</span><span class="desc-full" hidden>${summary}</span> <a href="#" class="show-more">show more</a>` : truncated}</div>
   </div>`;
 }
 
@@ -759,6 +760,21 @@ async function fetchVisitorIp(retries) {
 }
 
 // Init
+// Delegated click handler for "show more / show less" links in CVE descriptions
+document.addEventListener('click', function(e) {
+  if (!e.target.classList.contains('show-more')) return;
+  e.preventDefault();
+  const desc = e.target.closest('.desc');
+  if (!desc) return;
+  const short = desc.querySelector('.desc-short');
+  const full = desc.querySelector('.desc-full');
+  if (!short || !full) return;
+  const expanding = full.hidden;
+  short.hidden = expanding;
+  full.hidden = !expanding;
+  e.target.textContent = expanding ? 'show less' : 'show more';
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   setupThemeToggle();
   fetchPublicSettings();
