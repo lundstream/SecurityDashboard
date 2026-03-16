@@ -2051,8 +2051,13 @@ const PORT = settings.server.port || process.env.PORT || 3000;
 
   // Run AI analysis on boot if runOnBoot is set to 1
   if (aiConfig.enabled && (aiConfig.runOnBoot === 1 || aiConfig.runOnBoot === true)) {
-    console.log('[AI] runOnBoot enabled — triggering analysis...');
-    runAiAnalysisBothLanguages('yesterday').then(() => runAiAnalysisBothLanguages('week')).then(() => runAiAnalysisBothLanguages('month')).catch(e => console.error('[AI] Boot analysis error:', e.message));
+    console.log('[AI] runOnBoot enabled — triggering all analyses...');
+    runAiAnalysisBothLanguages('yesterday')
+      .then(() => runAiAnalysisBothLanguages('week'))
+      .then(() => runAiAnalysisBothLanguages('month'))
+      .then(() => runPatchTuesdayAiBothLanguages())
+      .then(() => runNewsSummaryAiBothLanguages())
+      .catch(e => console.error('[AI] Boot analysis error:', e.message));
   }
 
   app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
