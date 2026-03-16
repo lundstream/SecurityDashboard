@@ -1128,15 +1128,28 @@ app.get('/api/risk-priority', (req, res) => {
   const count = Math.min(parseInt(req.query.count || '15', 10), 100);
   const offset = parseInt(req.query.offset || '0', 10);
   const maxAge = Math.min(parseInt(req.query.maxAge || '90', 10), 365);
-  const vendor = req.query.vendor && req.query.vendor !== 'all' ? req.query.vendor : null;
-  const cacheKey = `risk:${count}:${offset}:${maxAge}:${vendor || ''}`;
+  const rawVendor = req.query.vendor;
+  let vendor = null;
+  if (rawVendor) {
+    const arr = Array.isArray(rawVendor) ? rawVendor : [rawVendor];
+    const filtered = arr.filter(v => v && v !== 'all');
+    if (filtered.length) vendor = filtered;
+  }
+  const cacheKey = `risk:${count}:${offset}:${maxAge}:${vendor ? vendor.join(',') : ''}`;
   cachedJson(res, cacheKey, 30000, () => db.getHighRiskCves(count, offset, maxAge, vendor));
 });
 
 app.get('/api/risk-vendors', (req, res) => {
   const maxAge = Math.min(parseInt(req.query.maxAge || '90', 10), 365);
-  const cacheKey = `risk-vendors:${maxAge}`;
-  cachedJson(res, cacheKey, 60000, () => db.getRiskVendorStats(maxAge));
+  const rawVendor = req.query.vendor;
+  let vendors = null;
+  if (rawVendor) {
+    const arr = Array.isArray(rawVendor) ? rawVendor : [rawVendor];
+    const filtered = arr.filter(v => v && v !== 'all');
+    if (filtered.length) vendors = filtered;
+  }
+  const cacheKey = `risk-vendors:${maxAge}:${vendors ? vendors.join(',') : ''}`;
+  cachedJson(res, cacheKey, 60000, () => db.getRiskVendorStats(maxAge, vendors));
 });
 
 app.get('/api/vendor-list', (req, res) => {

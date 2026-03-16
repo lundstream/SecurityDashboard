@@ -1035,17 +1035,11 @@ async function fetchAndRenderUptime(){
     if (window.uptimeChart) { window.uptimeChart.destroy(); window.uptimeChart = null; }
     const ctx = canvas.getContext('2d');
     window.uptimeChart = new Chart(ctx, {
-      type: 'line',
+      type: 'bar',
       data: { labels, datasets: [{
         data: values,
-        pointBackgroundColor: bgColors,
-        pointBorderColor: bgColors,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-        borderColor: 'rgba(132,0,255,0.3)',
-        borderWidth: 1,
-        fill: false,
-        tension: 0
+        backgroundColor: bgColors,
+        borderRadius: 2
       }] },
       options: {
         maintainAspectRatio: false,
@@ -1086,26 +1080,22 @@ async function fetchAndRenderCveStats(){
     if (window.cveChart) { window.cveChart.destroy(); window.cveChart = null; }
     const ctx = document.getElementById('cve-canvas').getContext('2d');
 
-    // compute color per bar based on value percentile in range
-    const min = Math.min(...counts);
-    const max = Math.max(...counts);
-    function pickColor(val){
-      if (max === min) return '#7b2cff';
-      const pct = ((val - min) / (max - min)) * 100;
-      if (pct <= 25) return '#7b2cff';
-      if (pct <= 50) return '#9b63ff';
-      if (pct <= 75) return '#d77bff';
-      return '#ff6fb1';
-    }
-    const colors = counts.map(v => pickColor(v));
-
     const isLight = document.documentElement.classList.contains('light-theme');
     const tickColor = isLight ? 'rgba(40,20,60,0.6)' : 'rgba(255,255,255,0.6)';
     const gridColor = isLight ? 'rgba(100,60,140,0.08)' : 'rgba(255,255,255,0.04)';
 
     window.cveChart = new Chart(ctx, {
-      type: 'bar',
-      data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderRadius:4 }] },
+      type: 'line',
+      data: { labels, datasets: [{
+        data: counts,
+        borderColor: '#ff4da6',
+        borderWidth: 2.5,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#fff',
+        fill: false,
+        tension: 0.25
+      }] },
       options: {
         maintainAspectRatio: false,
         layout: { padding: { top: 2, bottom: 0, left: 0, right: 0 } },
@@ -1117,7 +1107,7 @@ async function fetchAndRenderCveStats(){
           x: { ticks: { display: false }, grid: { display: false } },
           y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } }
         },
-        interaction: { mode: 'nearest', intersect: true },
+        interaction: { mode: 'index', intersect: false },
       }
     });
   } catch (e) { console.error('cve-stats', e); }

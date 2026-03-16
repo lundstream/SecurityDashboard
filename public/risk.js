@@ -13,25 +13,25 @@ let currentLang = localStorage.getItem('dashLang') || 'en';
 const i18n = {
   en: {
     riskHeading: "Top-priority CVE's",
-    riskVendor: 'Vendor:', riskPeriod: 'Period:',
+    riskVendor: 'Filter by vendor:', riskPeriod: 'Period:',
     riskLoadMore: 'Load more',
     riskFormulaTitle: 'How risk score is calculated',
     riskFormulaDesc: 'A CVE that is actively exploited (KEV), has a public exploit, no available patch, and was published recently will score highest, regardless of its CVSS severity rating alone.',
     riskScaleTitle: 'Score scale',
-    riskVendorChart: 'Highest Risk Vendors',
-    risk30: '30 days', risk90: '90 days', risk365: '1 year',
+    riskVendorChart: 'Critical Risk CVEs per Vendor (120+)',
+    risk30: '30 days', risk60: '60 days', risk180: '180 days',
     showMore: 'show more', showLess: 'show less',
     descPending: 'Recently published \u2014 description pending'
   },
   sv: {
     riskHeading: 'Prioriterade CVE:er',
-    riskVendor: 'Leverant\u00f6r:', riskPeriod: 'Period:',
+    riskVendor: 'Filtrera p\u00e5 leverant\u00f6r:', riskPeriod: 'Period:',
     riskLoadMore: 'Ladda fler',
     riskFormulaTitle: 'Hur riskpo\u00e4ng ber\u00e4knas',
     riskFormulaDesc: 'En CVE som aktivt utnyttjas (KEV), har offentlig exploit, saknar patch och \u00e4r nyligen publicerad f\u00e5r h\u00f6gst po\u00e4ng, oavsett CVSS-niv\u00e5.',
     riskScaleTitle: 'Po\u00e4ngskala',
-    riskVendorChart: 'H\u00f6gst risk per leverant\u00f6r',
-    risk30: '30 dagar', risk90: '90 dagar', risk365: '1 \u00e5r',
+    riskVendorChart: 'Kritiska CVE:er per leverant\u00f6r (120+)',
+    risk30: '30 dagar', risk60: '60 dagar', risk180: '180 dagar',
     showMore: 'visa mer', showLess: 'visa mindre',
     descPending: 'Nyligen publicerad \u2014 beskrivning inv\u00e4ntas'
   }
@@ -91,7 +91,7 @@ function renderRiskItems(items) {
     var kevBadge = it._kev ? '<span class="badge badge-kev">KEV</span>' : '';
     var exploitBadge = it._exploit ? '<span class="badge badge-exploit">Exploit</span>' : '<span class="badge badge-no">No exploit</span>';
     var patchBadge = it._patch ? '<span class="badge badge-patch">Patch</span>' : '<span class="badge badge-nopatch">No patch</span>';
-    var riskBadge = '<span class="badge badge-risk" style="border-left:3px solid ' + color + '">Risk rating: ' + score + '</span>';
+    var riskBadge = '<span class="badge" style="background:' + color + ';color:#fff;font-weight:700">Risk rating: ' + score + '</span>';
 
     // Summary with truncation (300 chars like Latest CVE's)
     var rawSummary = it.summary || it.description || '';
@@ -116,8 +116,17 @@ function renderRiskItems(items) {
 // --- State ---
 var PAGE_SIZE = 15;
 var offset = 0;
-var maxAge = 90;
-var vendor = null;
+var maxAge = 60;
+var selectedVendors = [];
+var allVendors = [];
+
+// Load saved default vendor filter from localStorage
+(function loadDefaultVendors() {
+  try {
+    var saved = localStorage.getItem('riskDefaultVendors');
+    if (saved) selectedVendors = JSON.parse(saved);
+  } catch (e) {}
+})();
 var allItems = [];
 var vendorChart = null;
 
@@ -129,7 +138,8 @@ async function loadRiskCves(resetOffset) {
   if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
   try {
     var url = '/api/risk-priority?count=' + PAGE_SIZE + '&offset=' + offset + '&maxAge=' + maxAge;
-    if (vendor) url += '&vendor=' + encodeURIComponent(vendor);
+    if (selectedVendors.length === 1) url += '&vendor=' + encodeURIComponent(selectedVendors[0]);
+    else if (selectedVendors.length > 1) selectedVendors.forEach(function(v){ url += '&vendor=' + encodeURIComponent(v); });
     var data = await fetchJSON(url);
     if (Array.isArray(data)) allItems = allItems.concat(data);
     offset += (Array.isArray(data) ? data.length : 0);
@@ -150,11 +160,13 @@ var CHART_COLORS = ['#8400ff','#9b63ff','#b47aff','#d77bff','#ff6fb1','#ff4da6',
 
 async function loadVendorChart() {
   try {
-    var data = await fetchJSON('/api/risk-vendors?maxAge=' + maxAge);
+    var url = '/api/risk-vendors?maxAge=' + maxAge;
+    if (selectedVendors.length) selectedVendors.forEach(function(v){ url += '&vendor=' + encodeURIComponent(v); });
+    var data = await fetchJSON(url);
     var canvas = document.getElementById('risk-vendor-canvas');
     if (!canvas || !Array.isArray(data) || data.length === 0) return;
     var labels = data.map(function(v){ return v.vendor || 'Unknown'; });
-    var scores = data.map(function(v){ return v.avg_risk || 0; });
+    var criticals = data.map(function(v){ return v.critical_count || 0; });
     var totals = data.map(function(v){ return v.total || 0; });
     var kevCounts = data.map(function(v){ return v.kev_count || 0; });
     var barColors = labels.map(function(_, i){ return CHART_COLORS[i % CHART_COLORS.length]; });
@@ -168,8 +180,8 @@ async function loadVendorChart() {
       data: {
         labels: labels,
         datasets: [{
-          label: 'Avg Risk Score',
-          data: scores,
+          label: 'Critical CVEs (120+)',
+          data: criticals,
           backgroundColor: barColors,
           borderRadius: 4,
           barPercentage: 0.7
@@ -184,13 +196,13 @@ async function loadVendorChart() {
             callbacks: {
               label: function(ctx) {
                 var i = ctx.dataIndex;
-                return ' Risk: ' + scores[i].toFixed(0) + ' | CVEs: ' + totals[i] + ' | KEV: ' + kevCounts[i];
+                return ' Critical: ' + criticals[i] + ' | Total CVEs: ' + totals[i] + ' | KEV: ' + kevCounts[i];
               }
             }
           }
         },
         scales: {
-          x: { beginAtZero: true, max: 170, ticks: { color: tickColor, font: { size: 10 } }, grid: { color: gridColor } },
+          x: { beginAtZero: true, ticks: { color: tickColor, font: { size: 10 }, stepSize: 1 }, grid: { color: gridColor } },
           y: { ticks: { color: tickColor, font: { size: 11 } }, grid: { display: false } }
         }
       }
@@ -198,38 +210,113 @@ async function loadVendorChart() {
   } catch (e) { console.error('risk-vendor-chart', e); }
 }
 
-// --- Vendor filter ---
+// --- Vendor filter (search-input style like report page) ---
 async function setupVendorFilter() {
-  var btn = document.getElementById('risk-vendor-btn');
-  var menu = document.getElementById('risk-vendor-menu');
-  if (!btn || !menu) return;
-  try {
-    var vendors = await fetchJSON('/api/vendor-list?days=' + maxAge);
-    while (menu.children.length > 1) menu.removeChild(menu.lastChild);
-    (vendors || []).forEach(function(v) {
-      var li = document.createElement('li');
-      li.className = 'cvss-option';
-      li.setAttribute('role', 'option');
-      li.setAttribute('data-value', v.vendor);
-      li.textContent = v.vendor + ' (' + v.cnt + ')';
-      menu.appendChild(li);
+  var input = document.getElementById('risk-vendor-search');
+  var listEl = document.getElementById('risk-vendor-list');
+  var tagEl = document.getElementById('risk-vendor-tag');
+  if (!input || !listEl) return;
+
+  // Always load all vendors regardless of day filter
+  try { allVendors = await fetchJSON('/api/vendor-list?days=365'); } catch(e) { allVendors = []; }
+
+  function renderTags() {
+    if (!tagEl) return;
+    if (selectedVendors.length === 0) { tagEl.innerHTML = ''; return; }
+    tagEl.innerHTML = selectedVendors.map(function(v) {
+      return '<span class="vendor-filter-tag" data-vendor="' + escapeHtml(v) + '">' + escapeHtml(v) + ' \u2715</span>';
+    }).join(' ');
+    tagEl.querySelectorAll('.vendor-filter-tag').forEach(function(tag) {
+      tag.onclick = function() {
+        selectedVendors = selectedVendors.filter(function(sv){ return sv !== tag.dataset.vendor; });
+        renderTags();
+        renderList(input.value);
+        loadRiskCves(true);
+        loadVendorChart();
+      };
     });
-  } catch (e) { /* ignore */ }
-  function closeMenu() { menu.setAttribute('aria-hidden', 'true'); btn.setAttribute('aria-expanded', 'false'); }
-  function openMenu() { menu.setAttribute('aria-hidden', 'false'); btn.setAttribute('aria-expanded', 'true'); }
-  btn.addEventListener('click', function(e) { e.stopPropagation(); var open = menu.getAttribute('aria-hidden') === 'false'; if (open) closeMenu(); else openMenu(); });
-  menu.addEventListener('click', function(e) {
-    var li = e.target.closest('.cvss-option');
-    if (!li) return;
-    var v = li.getAttribute('data-value');
-    vendor = (v === 'all') ? null : v;
-    btn.firstChild.nodeValue = (v === 'all' ? 'All' : v) + ' ';
-    menu.querySelectorAll('.cvss-option').forEach(function(o){ o.removeAttribute('aria-selected'); });
-    li.setAttribute('aria-selected', 'true');
-    loadRiskCves(true);
-    closeMenu();
+  }
+
+  function renderList(filter) {
+    var filtered = filter ? allVendors.filter(function(v){ return v.vendor.toLowerCase().includes(filter.toLowerCase()); }) : allVendors;
+    listEl.innerHTML = filtered.slice(0, 30).map(function(v) {
+      return '<div class="vf-item' + (selectedVendors.includes(v.vendor) ? ' selected' : '') + '" data-vendor="' + escapeHtml(v.vendor) + '">' + escapeHtml(v.vendor) + ' <span style="color:var(--muted);font-size:0.8em">(' + v.cnt + ')</span></div>';
+    }).join('');
+  }
+
+  input.addEventListener('focus', function() { renderList(input.value); listEl.classList.add('open'); });
+  input.addEventListener('input', function() { renderList(input.value); listEl.classList.add('open'); });
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.vendor-filter-wrap')) listEl.classList.remove('open');
   });
-  document.addEventListener('click', function(){ closeMenu(); });
+  listEl.addEventListener('click', function(e) {
+    var item = e.target.closest('.vf-item');
+    if (!item) return;
+    var v = item.dataset.vendor;
+    if (selectedVendors.includes(v)) {
+      selectedVendors = selectedVendors.filter(function(sv){ return sv !== v; });
+    } else {
+      selectedVendors.push(v);
+    }
+    input.value = '';
+    renderTags();
+    renderList('');
+    loadRiskCves(true);
+    loadVendorChart();
+  });
+
+  // Save / Clear default vendor filter button
+  var defaultBtn = document.getElementById('risk-vendor-save-default');
+  if (defaultBtn) {
+    function updateDefaultBtn() {
+      var savedRaw = localStorage.getItem('riskDefaultVendors');
+      var savedVendors = savedRaw ? JSON.parse(savedRaw) : [];
+      var currentSorted = selectedVendors.slice().sort();
+      var savedSorted = savedVendors.slice().sort();
+      var matchesSaved = savedVendors.length > 0 && currentSorted.length === savedSorted.length && currentSorted.every(function(v, i){ return v === savedSorted[i]; });
+      if (matchesSaved) {
+        defaultBtn.textContent = 'Clear Default';
+        defaultBtn.title = 'Remove saved default vendor filter';
+        defaultBtn.style.display = 'inline-block';
+        defaultBtn.onclick = function() {
+          localStorage.removeItem('riskDefaultVendors');
+          selectedVendors = [];
+          renderTags();
+          loadRiskCves(true);
+          loadVendorChart();
+        };
+      } else if (selectedVendors.length > 0) {
+        defaultBtn.textContent = 'Set as Default';
+        defaultBtn.title = 'Save current vendor filter as default';
+        defaultBtn.style.display = 'inline-block';
+        defaultBtn.onclick = function() {
+          localStorage.setItem('riskDefaultVendors', JSON.stringify(selectedVendors));
+          updateDefaultBtn();
+        };
+      } else if (savedVendors.length > 0) {
+        defaultBtn.textContent = 'Clear Default';
+        defaultBtn.title = 'Remove saved default vendor filter';
+        defaultBtn.style.display = 'inline-block';
+        defaultBtn.onclick = function() {
+          localStorage.removeItem('riskDefaultVendors');
+          selectedVendors = [];
+          renderTags();
+          loadRiskCves(true);
+          loadVendorChart();
+        };
+      } else {
+        defaultBtn.style.display = 'none';
+      }
+    }
+    // Patch renderTags to also update the default button
+    var origRenderTags = renderTags;
+    renderTags = function() { origRenderTags(); updateDefaultBtn(); };
+    updateDefaultBtn();
+  }
+
+  // Render initial tags (from saved defaults)
+  renderTags();
+  renderList('');
 }
 
 // --- Age filter ---
@@ -250,7 +337,6 @@ function setupAgeFilter() {
       li.setAttribute('aria-selected', 'true');
       loadRiskCves(true);
       loadVendorChart();
-      setupVendorFilter();
       closeMenu();
     });
   });
@@ -301,14 +387,14 @@ function applyTranslations() {
   document.querySelectorAll('#risk-age-menu .cvss-option').forEach(function(li){
     var v = li.getAttribute('data-value');
     if (v === '30') li.textContent = t('risk30');
-    else if (v === '90') li.textContent = t('risk90');
-    else if (v === '365') li.textContent = t('risk365');
+    else if (v === '60') li.textContent = t('risk60');
+    else if (v === '180') li.textContent = t('risk180');
   });
   var riskAgeText = document.getElementById('risk-age-text');
   if (riskAgeText) {
     if (maxAge === 30) riskAgeText.textContent = t('risk30');
-    else if (maxAge === 365) riskAgeText.textContent = t('risk365');
-    else riskAgeText.textContent = t('risk90');
+    else if (maxAge === 180) riskAgeText.textContent = t('risk180');
+    else riskAgeText.textContent = t('risk60');
   }
   var langLabel = document.getElementById('lang-label');
   if (langLabel) langLabel.textContent = currentLang.toUpperCase();

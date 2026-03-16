@@ -646,11 +646,22 @@ function getHighRiskCves(count, offset, maxAgeDays, vendor) {
   });
 }
 
-function getRiskVendorStats(maxAgeDays) {
+function getRiskVendorStats(maxAgeDays, vendors) {
   const d = getDb();
   const cutoff = new Date(Date.now() - (maxAgeDays || 90) * 24 * 60 * 60 * 1000).toISOString();
+  let where = `WHERE published >= ? AND published IS NOT NULL AND cvss_score IS NOT NULL
+    AND vendor IS NOT NULL AND vendor != ''`;
+  const params = [cutoff];
+  if (vendors && vendors.length) {
+    where += ` AND lower(vendor) IN (${vendors.map(() => '?').join(',')})`;
+    params.push(...vendors.map(v => v.toLowerCase()));
+  }
   return d.prepare(`SELECT UPPER(SUBSTR(MAX(vendor),1,1)) || SUBSTR(MAX(vendor),2) as vendor,
     COUNT(*) as total,
+    SUM(CASE WHEN (cvss_score * 10
+      + (CASE WHEN kev = 1 THEN 30 ELSE 0 END)
+      + (CASE WHEN has_exploit = 1 THEN 20 ELSE 0 END)
+      + (CASE WHEN has_patch = 0 THEN 15 ELSE 0 END)) >= 120 THEN 1 ELSE 0 END) as critical_count,
     ROUND(AVG(
       (cvss_score * 10)
       + (CASE WHEN kev = 1 THEN 30 ELSE 0 END)
@@ -659,11 +670,11 @@ function getRiskVendorStats(maxAgeDays) {
     ), 1) as avg_risk,
     SUM(CASE WHEN kev = 1 THEN 1 ELSE 0 END) as kev_count,
     SUM(CASE WHEN has_exploit = 1 THEN 1 ELSE 0 END) as exploit_count
-    FROM cves WHERE published >= ? AND published IS NOT NULL AND cvss_score IS NOT NULL
-    AND vendor IS NOT NULL AND vendor != ''
+    FROM cves ${where}
     GROUP BY vendor COLLATE NOCASE
-    ORDER BY avg_risk DESC, total DESC
-    LIMIT 10`).all(cutoff);
+    HAVING critical_count > 0
+    ORDER BY critical_count DESC, avg_risk DESC
+    LIMIT 10`).all(...params);
 }
 
 module.exports = {

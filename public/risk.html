@@ -67,7 +67,20 @@
     .badge-patch{background:#2ecc71;color:#fff}
     .badge-no{background:rgba(255,255,255,0.08);color:var(--muted)}
     .badge-nopatch{background:rgba(255,77,77,0.12);color:#ff6b6b}
-    .badge-risk{background:rgba(132,0,255,0.18);color:#b580ff;font-weight:700}
+    .badge-risk{font-weight:700}
+    /* Vendor filter (matching report page) */
+    .vendor-filter{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .vendor-filter-wrap{position:relative;flex:1;max-width:300px}
+    .vendor-filter-wrap input{width:100%;padding:8px 12px 8px 32px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:inherit;font-size:0.85em;box-sizing:border-box}
+    .vendor-filter-wrap .vf-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted);opacity:0.5}
+    .vendor-filter-wrap .vf-icon svg{width:14px;height:14px}
+    .vendor-filter-list{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;max-height:200px;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);display:none}
+    .vendor-filter-list.open{display:block}
+    .vendor-filter-list .vf-item{padding:8px 12px;cursor:pointer;font-size:0.85em;transition:background 0.1s}
+    .vendor-filter-list .vf-item:hover{background:rgba(255,255,255,0.06)}
+    .vendor-filter-list .vf-item.selected{background:rgba(132,0,255,0.15)}
+    .vendor-filter-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(132,0,255,0.2);color:var(--accent-purple);padding:4px 10px;border-radius:999px;font-size:0.8em;font-weight:600;cursor:pointer}
+    .vendor-filter-tag:hover{background:rgba(132,0,255,0.3)}
     .desc{font-family:'Geist Sans',Inter,Arial,Helvetica,sans-serif;color:var(--muted);font-size:0.95em;margin-top:6px}
     .show-more{color:var(--accent-pink);cursor:pointer;font-size:0.85em;text-decoration:none;margin-left:4px}
     .show-more:hover{text-decoration:underline}
@@ -109,6 +122,10 @@
     html.light-theme .cvss-dropdown-menu{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12)}
     html.light-theme .cvss-option:hover{background:rgba(100,60,140,0.06)}
     html.light-theme .load-more-btn{background:var(--accent-purple);color:#fff}
+    html.light-theme .vendor-filter-wrap input{background:rgba(100,60,140,0.06);border-color:rgba(100,60,140,0.12);color:#1a0a2e}
+    html.light-theme .vendor-filter-list{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12)}
+    html.light-theme .vendor-filter-list .vf-item:hover{background:rgba(100,60,140,0.06)}
+    html.light-theme #synthwave-canvas{display:none}
     html.light-theme .chart-container{background:linear-gradient(180deg,rgba(100,60,140,0.02),rgba(100,60,140,0.04));border-radius:10px}
     @media(max-width:700px){
       header{flex-direction:column;align-items:flex-start;gap:10px}
@@ -142,23 +159,24 @@
           <span id="risk-heading-text">Top-priority CVE's</span>
         </h1>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:6px">
-            <label style="font-size:0.9rem;color:var(--muted)" id="risk-vendor-label">Vendor:</label>
-            <div id="risk-vendor-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
-              <button id="risk-vendor-btn" class="filter-select" aria-expanded="false">All <span class="caret">&#9662;</span></button>
-              <ul id="risk-vendor-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true" style="max-height:300px;overflow-y:auto">
-                <li class="cvss-option" data-value="all" role="option" aria-selected="true">All</li>
-              </ul>
+          <div class="vendor-filter" style="gap:8px">
+            <span style="font-size:0.85em;color:var(--muted)" id="risk-vendor-label">Filter by vendor:</span>
+            <div class="vendor-filter-wrap">
+              <span class="vf-icon"><i data-feather="search"></i></span>
+              <input type="text" id="risk-vendor-search" placeholder="Search vendors..." autocomplete="off">
+              <div class="vendor-filter-list" id="risk-vendor-list"></div>
             </div>
+            <span id="risk-vendor-tag"></span>
+            <button id="risk-vendor-save-default" style="display:none;font-size:0.78em;padding:4px 10px;border-radius:999px;background:var(--accent-purple);color:#fff;border:none;cursor:pointer;font-weight:600">Set as Default</button>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <label style="font-size:0.9rem;color:var(--muted)" id="risk-age-label">Period:</label>
             <div id="risk-age-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
-              <button id="risk-age-btn" class="filter-select" aria-expanded="false"><span id="risk-age-text">90 days</span> <span class="caret">&#9662;</span></button>
+              <button id="risk-age-btn" class="filter-select" aria-expanded="false"><span id="risk-age-text">60 days</span> <span class="caret">&#9662;</span></button>
               <ul id="risk-age-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true">
                 <li class="cvss-option" data-value="30" role="option">30 days</li>
-                <li class="cvss-option" data-value="90" role="option" aria-selected="true">90 days</li>
-                <li class="cvss-option" data-value="365" role="option">1 year</li>
+                <li class="cvss-option" data-value="60" role="option" aria-selected="true">60 days</li>
+                <li class="cvss-option" data-value="180" role="option">180 days</li>
               </ul>
             </div>
           </div>
@@ -232,6 +250,78 @@
       function tryReplace(){ if(window.feather){ try{ feather.replace(); }catch(e){} } else { setTimeout(tryReplace, 200); } }
       tryReplace();
     });
+  </script>
+  <!-- Animated starfield background -->
+  <script>
+  (function(){
+    const cv = document.getElementById('synthwave-canvas');
+    if(!cv) return;
+    fetch('/api/settings/public').then(r=>r.json()).then(function(cfg){
+      if(cfg.animatedBackground === false){
+        cv.style.display = 'none';
+        document.body.style.background = 'linear-gradient(135deg, #0f0620 0%, #2c0038 40%, #1b0033 60%)';
+        document.body.style.backgroundAttachment = 'fixed';
+        return;
+      }
+      if(localStorage.getItem('animOn')==='1'){
+        startAnimation();
+      } else {
+        cv.style.display = 'none';
+        document.body.style.background = 'linear-gradient(135deg, #0f0620 0%, #2c0038 40%, #1b0033 60%)';
+        document.body.style.backgroundAttachment = 'fixed';
+      }
+    }).catch(function(){ startAnimation(); });
+    function startAnimation(){
+    const ctx = cv.getContext('2d');
+    let W, H, dpr;
+    function resize(){
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = W * dpr; cv.height = H * dpr;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      initStars();
+    }
+    const STAR_COUNT = 180;
+    let stars = [];
+    function initStars(){
+      stars = [];
+      for(let i=0;i<STAR_COUNT;i++){
+        stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.4+0.3,a:Math.random()*0.7+0.3,twinkleSpeed:Math.random()*0.02+0.005,twinklePhase:Math.random()*Math.PI*2});
+      }
+    }
+    const shoots = [];
+    function spawnShoot(){
+      shoots.push({x:Math.random()*W*0.8+W*0.1,y:Math.random()*H*0.4,vx:(Math.random()*3+2)*(Math.random()>0.5?1:-1),vy:Math.random()*2+1.5,life:1,len:Math.random()*60+40,decay:Math.random()*0.012+0.008});
+    }
+    let t = 0;
+    function draw(){
+      t++;
+      ctx.clearRect(0,0,W,H);
+      const sky = ctx.createLinearGradient(0,0,W,H);
+      sky.addColorStop(0,'#0f0620');sky.addColorStop(0.4,'#2c0038');sky.addColorStop(0.6,'#1b0033');sky.addColorStop(1,'#0f0620');
+      ctx.fillStyle = sky; ctx.fillRect(0,0,W,H);
+      for(const s of stars){
+        const flicker = Math.sin(t*s.twinkleSpeed+s.twinklePhase)*0.35+0.65;
+        ctx.globalAlpha = s.a * flicker; ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if(Math.random()<0.008) spawnShoot();
+      for(let i=shoots.length-1;i>=0;i--){
+        const sh = shoots[i]; sh.x+=sh.vx; sh.y+=sh.vy; sh.life-=sh.decay;
+        if(sh.life<=0){shoots.splice(i,1);continue;}
+        const dx=-sh.vx,dy=-sh.vy,mag=Math.sqrt(dx*dx+dy*dy),nx=dx/mag*sh.len,ny=dy/mag*sh.len;
+        const grad=ctx.createLinearGradient(sh.x,sh.y,sh.x+nx,sh.y+ny);
+        grad.addColorStop(0,'rgba(255,255,255,'+sh.life+')');grad.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.strokeStyle=grad;ctx.lineWidth=1.5;ctx.globalAlpha=sh.life;
+        ctx.beginPath();ctx.moveTo(sh.x,sh.y);ctx.lineTo(sh.x+nx,sh.y+ny);ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(draw);
+    }
+    resize(); window.addEventListener('resize', resize); draw();
+    }
+  })();
   </script>
 </body>
 </html>
