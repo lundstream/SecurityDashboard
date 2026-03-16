@@ -227,28 +227,7 @@ async function loadPtAnalysis() {
   }
 }
 
-// --- Generate button ---
-function setupGenerateBtn() {
-  const btn = document.getElementById('ai-generate-btn');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    const label = document.getElementById('ai-generate-label');
-    const origText = label ? label.textContent : '';
-    if (label) label.textContent = t('generating');
-    // Add spinner
-    const spinner = document.createElement('span');
-    spinner.className = 'spinner';
-    btn.prepend(spinner);
-    try {
-      await fetch('/api/patchtuesday/analyze', { method: 'POST' });
-      await loadPtAnalysis();
-    } catch (e) {}
-    btn.disabled = false;
-    if (spinner.parentNode) spinner.remove();
-    if (label) label.textContent = t('generateBtn');
-  });
-}
+
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -257,6 +236,5 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTranslations();
   fetchPublicSettings();
   fetchVisitorIp();
-  setupGenerateBtn();
   loadPtAnalysis();
 });

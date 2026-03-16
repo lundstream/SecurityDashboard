@@ -67,7 +67,7 @@
     .ai-content code{background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-size:0.9em}
     .ai-content a{color:var(--accent-pink);text-decoration:none}
     .ai-content a:hover{text-decoration:underline}
-    .generate-btn{display:inline-flex;align-items:center;gap:6px;font-size:0.82em;padding:6px 16px}
+
     .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     /* Light theme */
@@ -126,10 +126,7 @@
       <div class="card ai-card" style="margin-top:16px">
         <div class="ai-header">
           <h2><i data-feather="cpu"></i> <span id="ai-heading">AI Patch Tuesday Analysis</span></h2>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span class="ai-meta" id="ai-updated"></span>
-            <button class="generate-btn" id="ai-generate-btn"><i data-feather="refresh-cw" style="width:13px;height:13px"></i> <span id="ai-generate-label">Generate</span></button>
-          </div>
+          <span class="ai-meta" id="ai-updated"></span>
         </div>
         <div class="ai-content" id="ai-content">
           <div class="empty-state" id="ai-loading">Loading...</div>
