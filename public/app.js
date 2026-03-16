@@ -322,12 +322,15 @@ function renderCveItems(items) {
         summary = summary.slice(tnorm.length).trim();
       }
     }
-    // Truncate to ~300 chars at a word boundary
+    // Truncate to ~300 chars at a word boundary, keep full text for expand
+    let truncated = false;
+    let fullSummary = summary;
     if (summary.length > 300) {
       summary = summary.slice(0, 300).replace(/\s+\S*$/, '') + '…';
+      truncated = true;
     }
     if (!summary) summary = 'Recently published \u2014 description pending';
-    const zeroTag = /\bzero[- ]?day\b|\b0[- ]?day\b|zero\sday/i.test(summary) ? '<span class="tag">Possible Zero-Day</span>' : '';
+    const zeroTag = /\bzero[- ]?day\b|\b0[- ]?day\b|zero\sday/i.test(fullSummary) ? '<span class="tag">Possible Zero-Day</span>' : '';
     // Render as: ID: Title  (link the ID when present). Fall back to title when no ID.
     let headHtml = '';
     if (id) {
@@ -351,7 +354,7 @@ function renderCveItems(items) {
         <div>${headHtml}${zeroHtml}</div>
         <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • ${discoveredLine}Published: ${published}</div>
         <div class="cve-badges">${exploitBadge} ${patchBadge} ${kevBadge}</div>
-        <div class="desc">${escapeHtml(summary)}</div>
+        <div class="desc">${truncated ? `<span class="desc-short">${escapeHtml(summary)}</span><span class="desc-full" hidden>${escapeHtml(fullSummary)}</span> <a href="#" class="show-more">show more</a>` : escapeHtml(summary)}</div>
       </div>
     `;
   }).join('');
@@ -783,6 +786,21 @@ function init() {
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
 else init();
+
+// Delegated click handler for "show more / show less" links in CVE descriptions
+document.addEventListener('click', function(e) {
+  if (!e.target.classList.contains('show-more')) return;
+  e.preventDefault();
+  const desc = e.target.closest('.desc');
+  if (!desc) return;
+  const short = desc.querySelector('.desc-short');
+  const full = desc.querySelector('.desc-full');
+  if (!short || !full) return;
+  const expanding = full.hidden;
+  short.hidden = expanding;
+  full.hidden = !expanding;
+  e.target.textContent = expanding ? 'show less' : 'show more';
+});
 
 // --- header/status/chart helpers ---
 async function fetchAndRenderStatus() {

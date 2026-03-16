@@ -157,8 +157,8 @@ function slimCve(row) {
     const note = obj.document.notes.find(n => n.category === 'summary') || obj.document.notes[0];
     if (note) summary = note.text || note.title || note.summary || '';
   }
-  // Truncate summary to 500 chars server-side (frontend truncates to 300 anyway)
-  if (summary.length > 500) summary = summary.slice(0, 500);
+  // Truncate very long summaries server-side to keep response size reasonable
+  if (summary.length > 2000) summary = summary.slice(0, 2000);
 
   // --- extract CVSS ---
   let cvss = row.cvss_score != null ? row.cvss_score : null;
