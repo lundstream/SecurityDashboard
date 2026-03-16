@@ -79,6 +79,11 @@
     html.light-theme .copyright{color:rgba(40,20,60,0.6)}
     html.light-theme #theme-toggle{color:rgba(40,20,60,0.6)}
     html.light-theme #theme-toggle:hover{color:#1a0a2e}
+    .lang-toggle-btn{background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;padding:6px 10px;margin-left:4px;border-radius:999px;display:flex;align-items:center;gap:5px;font-size:0.82em;font-weight:600;font-family:inherit;transition:color .2s}
+    .lang-toggle-btn:hover{color:#fff}
+    .lang-toggle-btn svg{width:18px;height:18px}
+    html.light-theme .lang-toggle-btn{color:rgba(40,20,60,0.6)}
+    html.light-theme .lang-toggle-btn:hover{color:#1a0a2e}
     html.light-theme .tool-input-row input{background:rgba(100,60,140,0.06);border-color:rgba(100,60,140,0.12);color:#1a0a2e}
     html.light-theme .tool-result{background:rgba(100,60,140,0.04);border-color:rgba(100,60,140,0.08)}
     html.light-theme .tool-result .label{color:var(--accent-purple)}
@@ -101,23 +106,24 @@
       <a href="/" style="text-decoration:none"><div style="font-size:1.3em;font-weight:600" class="site-title">Security dashboard</div></a>
     </div>
     <div style="display:flex;align-items:center;gap:12px">
-      <a href="/" style="color:var(--muted);text-decoration:none;font-size:0.9em;display:inline-flex;align-items:center;gap:4px"><i data-feather="arrow-left" style="width:14px;height:14px"></i> Dashboard</a>
+      <a href="/" style="color:var(--muted);text-decoration:none;font-size:0.9em;display:inline-flex;align-items:center;gap:4px"><i data-feather="arrow-left" style="width:14px;height:14px"></i> <span id="nav-dashboard-label">Dashboard</span></a>
       <button id="theme-toggle" aria-label="Toggle theme"><i data-feather="sun"></i></button>
+      <button id="lang-toggle" class="lang-toggle-btn" aria-label="Toggle language"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg> <span id="lang-label">EN</span></button>
     </div>
   </header>
 
   <main id="main-content">
     <div style="max-width:1100px;margin:0 auto;width:100%">
-      <h1 style="font-size:1.4rem;margin-bottom:4px;display:flex;align-items:center;gap:8px"><i data-feather="tool"></i> Security Tools</h1>
-      <p style="color:var(--muted);font-size:0.85em;margin:4px 0 0">Analyze, lookup and investigate security data.</p>
+      <h1 style="font-size:1.4rem;margin-bottom:4px;display:flex;align-items:center;gap:8px"><i data-feather="tool"></i> <span id="tools-heading">Security Tools</span></h1>
+      <p id="tools-subtitle" style="color:var(--muted);font-size:0.85em;margin:4px 0 0">Analyze, lookup and investigate security data.</p>
     </div>
 
     <div class="tools-grid">
 
       <!-- 1. Website Security Headers -->
       <div class="card tool-card" id="tool-headers">
-        <h3><i data-feather="globe"></i> Website Analysis</h3>
-        <p>Enter a URL to analyze HTTP security headers.</p>
+        <h3><i data-feather="globe"></i> <span class="tool-title" data-tool="headers">Website Analysis</span></h3>
+        <p class="tool-desc" data-tool="headers">Enter a URL to analyze HTTP security headers.</p>
         <div class="tool-input-row">
           <input type="text" id="headers-input" placeholder="https://example.com" />
           <button id="headers-btn">Analyze</button>
@@ -127,8 +133,8 @@
 
       <!-- 2. DNS Record Lookup -->
       <div class="card tool-card" id="tool-dns">
-        <h3><i data-feather="server"></i> DNS Record Lookup</h3>
-        <p>Retrieve A, AAAA, MX, and TXT records for a domain.</p>
+        <h3><i data-feather="server"></i> <span class="tool-title" data-tool="dns">DNS Record Lookup</span></h3>
+        <p class="tool-desc" data-tool="dns">Retrieve A, AAAA, MX, and TXT records for a domain.</p>
         <div class="tool-input-row">
           <input type="text" id="dns-input" placeholder="example.com" />
           <button id="dns-btn">Lookup</button>
@@ -138,8 +144,8 @@
 
       <!-- 3. Malware Hash Checker -->
       <div class="card tool-card" id="tool-hash">
-        <h3><i data-feather="search"></i> Malware Hash Checker</h3>
-        <p>Search for file hashes (MD5, SHA-1, SHA-256) in known threat databases.</p>
+        <h3><i data-feather="search"></i> <span class="tool-title" data-tool="hash">Malware Hash Checker</span></h3>
+        <p class="tool-desc" data-tool="hash">Search for file hashes (MD5, SHA-1, SHA-256) in known threat databases.</p>
         <div class="tool-input-row">
           <input type="text" id="hash-input" placeholder="Enter MD5, SHA-1 or SHA-256 hash" />
           <button id="hash-btn">Check</button>
@@ -149,8 +155,8 @@
 
       <!-- 4. IP Scout -->
       <div class="card tool-card" id="tool-ip">
-        <h3><i data-feather="map-pin"></i> IP Scout</h3>
-        <p>Geographic location, ISP, and network data for IP addresses.</p>
+        <h3><i data-feather="map-pin"></i> <span class="tool-title" data-tool="ip">IP Scout</span></h3>
+        <p class="tool-desc" data-tool="ip">Geographic location, ISP, and network data for IP addresses.</p>
         <div class="tool-input-row">
           <input type="text" id="ip-input" placeholder="8.8.8.8" />
           <button id="ip-btn">Scout</button>
@@ -160,8 +166,8 @@
 
       <!-- 5. Port & Vulnerability Check -->
       <div class="card tool-card" id="tool-ports">
-        <h3><i data-feather="wifi"></i> Port &amp; Vulnerability Check</h3>
-        <p>Check open ports, services, and known vulnerabilities via Shodan.</p>
+        <h3><i data-feather="wifi"></i> <span class="tool-title" data-tool="ports">Port &amp; Vulnerability Check</span></h3>
+        <p class="tool-desc" data-tool="ports">Check open ports, services, and known vulnerabilities via Shodan.</p>
         <div class="tool-input-row">
           <input type="text" id="ports-input" placeholder="8.8.8.8 or example.com" />
           <button id="ports-btn">Scan</button>
@@ -171,8 +177,8 @@
 
       <!-- 6. Password Check -->
       <div class="card tool-card" id="tool-password">
-        <h3><i data-feather="lock"></i> Password Check</h3>
-        <p>Secure check against the Have I Been Pwned database. Your password never leaves the browser.</p>
+        <h3><i data-feather="lock"></i> <span class="tool-title" data-tool="password">Password Check</span></h3>
+        <p class="tool-desc" data-tool="password">Secure check against the Have I Been Pwned database. Your password never leaves the browser.</p>
         <div class="tool-input-row">
           <input type="password" id="password-input" placeholder="Enter password to check" />
           <button id="password-btn">Check</button>
@@ -182,8 +188,8 @@
 
       <!-- 7. Email Breach Check -->
       <div class="card tool-card" id="tool-email-breach">
-        <h3><i data-feather="mail"></i> Email Breach Check</h3>
-        <p>Check if an email address has been compromised in known data breaches via Have I Been Pwned.</p>
+        <h3><i data-feather="mail"></i> <span class="tool-title" data-tool="email">Email Breach Check</span></h3>
+        <p class="tool-desc" data-tool="email">Check if an email address has been compromised in known data breaches via Have I Been Pwned.</p>
         <div class="tool-input-row">
           <input type="email" id="email-breach-input" placeholder="user@example.com" />
           <button id="email-breach-btn">Check</button>

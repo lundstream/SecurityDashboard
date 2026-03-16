@@ -1121,6 +1121,237 @@ app.get('/api/top-vendors', (req, res) => {
 });
 
 // =========================================================================
+//  PATCH TUESDAY API
+// =========================================================================
+
+// Compute the second Tuesday of a given month
+function getSecondTuesday(year, month) {
+  const first = new Date(year, month, 1);
+  const dayOfWeek = first.getDay(); // 0=Sun
+  const daysUntilTuesday = (9 - dayOfWeek) % 7; // days until first Tuesday
+  const firstTuesday = 1 + daysUntilTuesday;
+  return new Date(year, month, firstTuesday + 7); // second Tuesday
+}
+
+// Timezone-safe local date string (YYYY-MM-DD)
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getNextPatchTuesday() {
+  const now = new Date();
+  const thisMonth = getSecondTuesday(now.getFullYear(), now.getMonth());
+  if (thisMonth > now) return thisMonth;
+  // This month's PT already passed — next month
+  const nm = now.getMonth() + 1;
+  const ny = nm > 11 ? now.getFullYear() + 1 : now.getFullYear();
+  return getSecondTuesday(ny, nm % 12);
+}
+
+function getPatchTuesdayDates(count) {
+  const dates = [];
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth();
+  for (let i = 0; i < count; i++) {
+    const pt = getSecondTuesday(y, m);
+    dates.push(pt);
+    m--;
+    if (m < 0) { m = 11; y--; }
+  }
+  return dates;
+}
+
+// Build AI prompt specifically for Patch Tuesday analysis
+function buildPatchTuesdayAiPrompt(language) {
+  language = language || 'en';
+
+  // Get CVEs from the last 30 days (covers the current PT cycle)
+  const stats = db.getReportStats(30);
+  const topVendors = db.getTopVendorsWithBreakdown(30, 15);
+  const kevCves = db.getReportCves({ days: 30, kevOnly: true }).map(simplify);
+  const critCves = db.getReportCves({ days: 30, minCvss: 9, limit: 25 }).map(simplify);
+  const highNoPatch = db.getReportCves({ days: 30, minCvss: 7, noPatchOnly: true, limit: 20 }).map(simplify);
+  const news = db.getRecentNews(14);
+
+  // Focus on Microsoft specifically
+  const msVendors = topVendors.filter(v => /microsoft|windows|office|edge|exchange|azure/i.test(v.vendor));
+  const msCves = db.getReportCves({ days: 30, vendor: 'Microsoft', limit: 30 }).map(simplify);
+
+  const vendorSummary = topVendors.map(v =>
+    `  ${v.vendor}: ${v.cnt} CVEs (critical:${v.critical||0}, high:${v.high||0}, KEV:${v.kev||0})`
+  ).join('\n');
+
+  const msSummary = msCves.slice(0, 20).map(c =>
+    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 150)}`
+  ).join('\n');
+
+  const kevSummary = kevCves.slice(0, 15).map(c =>
+    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 120)}`
+  ).join('\n');
+
+  const critSummary = critCves.slice(0, 15).map(c =>
+    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 120)}`
+  ).join('\n');
+
+  const noPatchSummary = highNoPatch.slice(0, 10).map(c =>
+    `  ${c.id} [CVSS:${c.cvss||'?'}] ${c.vendor} - ${(c.summary||'').slice(0, 120)}`
+  ).join('\n');
+
+  const newsSummary = news.slice(0, 20).map(n =>
+    `  [${n.source}] ${n.title}`
+  ).join('\n');
+
+  const nextPt = getNextPatchTuesday();
+  const nextPtStr = localDateStr(nextPt);
+
+  const langInstruction = language === 'sv'
+    ? 'Write the ENTIRE response in Swedish. All section headers and body text must be in Swedish. Keep CVE IDs and vendor names in their original English form.'
+    : 'Write the response in English.';
+
+  return `You are a senior IT security analyst specializing in Microsoft Patch Tuesday analysis. The next Patch Tuesday is ${nextPtStr}.
+${langInstruction}
+
+Provide a thorough pre-Patch Tuesday briefing based on the current threat landscape. This should help IT administrators prepare for the upcoming patch cycle.
+
+STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
+
+## ${language === 'sv' ? 'Sammanfattning inför Patch Tuesday' : 'Patch Tuesday Preview'}
+A thorough overview of what to expect this Patch Tuesday. Cover recent Microsoft vulnerability trends, the volume and severity of recent CVEs, and what areas demand immediate attention (4-6 sentences).
+
+## ${language === 'sv' ? 'Kritiska Microsoft-sårbarheter' : 'Critical Microsoft Vulnerabilities'}
+Analyze the most critical Microsoft CVEs from the current cycle. For each major CVE, explain the affected product (Windows, Office, Exchange, Azure, Edge, etc.), the attack vector, real-world impact, and urgency. Focus on KEV entries and zero-days.
+
+## ${language === 'sv' ? 'Aktiva hot och utnyttjade sårbarheter' : 'Active Threats & Exploited Vulnerabilities'}
+Detail any known exploited vulnerabilities (KEV), active exploitation campaigns, and zero-day threats relevant to Microsoft products. Explain the risk and who is affected.
+
+## ${language === 'sv' ? 'Prioriteringsguide för patchning' : 'Patch Priority Guide'}
+Provide a clear priority list for IT teams:
+- **${language === 'sv' ? 'Kritiskt — patcha omedelbart' : 'Critical — Patch Immediately'}**: Vulnerabilities being actively exploited or with public exploits
+- **${language === 'sv' ? 'Högt — patcha inom 48 timmar' : 'High — Patch Within 48 Hours'}**: High-severity CVEs with significant impact
+- **${language === 'sv' ? 'Medium — patcha inom en vecka' : 'Medium — Patch Within a Week'}**: Important but lower-risk updates
+
+## ${language === 'sv' ? 'Drabbade produkter och komponenter' : 'Affected Products & Components'}
+Break down which Microsoft products and components are most affected. Help IT teams understand which systems need attention first.
+
+## ${language === 'sv' ? 'Rekommendationer och förberedelser' : 'Recommendations & Preparation'}
+Provide 5-8 specific, actionable recommendations for IT administrators to prepare for this Patch Tuesday. Include pre-patch testing advice, rollback planning, and monitoring guidance.
+
+Aim for approximately 1200-1500 words. Be specific and reference actual CVE IDs from the data. Focus on Microsoft products but mention other critical vendors if relevant.
+
+--- DATA ---
+NEXT PATCH TUESDAY: ${nextPtStr}
+STATS (last 30 days): ${stats.total} total CVEs, ${stats.critical} critical (CVSS>=9), ${stats.kevCount} known exploited
+
+TOP VENDORS:
+${vendorSummary || '  No vendor data available'}
+
+MICROSOFT CVEs:
+${msSummary || '  No Microsoft CVEs found'}
+
+KNOWN EXPLOITED VULNERABILITIES (KEV):
+${kevSummary || '  None in this period'}
+
+CRITICAL CVEs (CVSS 9+):
+${critSummary || '  None in this period'}
+
+HIGH SEVERITY WITHOUT PATCHES (CVSS 7+):
+${noPatchSummary || '  None in this period'}
+
+RECENT SECURITY NEWS:
+${newsSummary || '  No news available'}`;
+}
+
+async function runPatchTuesdayAiAnalysis(language) {
+  language = language || 'en';
+  if (!aiConfig.enabled || !aiConfig.githubToken) {
+    console.log('[AI] Patch Tuesday analysis skipped (disabled or no token)');
+    return null;
+  }
+
+  const prompt = buildPatchTuesdayAiPrompt(language);
+  const model = aiConfig.model || 'gpt-4o-mini';
+  const maxTokens = aiConfig.maxTokens || 4000;
+
+  console.log(`[AI] Running Patch Tuesday analysis (${language}) with model ${model}...`);
+
+  try {
+    const resp = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${aiConfig.githubToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: language === 'sv'
+            ? 'Du är en professionell IT-säkerhetsanalytiker som specialiserar sig på Microsoft Patch Tuesday-analys. Skriv detaljerade briefings på svenska. Använd markdown-formatering.'
+            : 'You are a professional IT security analyst specializing in Microsoft Patch Tuesday analysis. Write detailed briefings. Use markdown formatting.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.3
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error(`[AI] PT API error ${resp.status}: ${errText}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    const analysis = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+
+    if (!analysis) {
+      console.error('[AI] PT: No content in response');
+      return null;
+    }
+
+    db.saveAiAnalysis('patchtuesday', analysis, language);
+    console.log(`[AI] Patch Tuesday (${language}) analysis saved (${analysis.length} chars)`);
+    return analysis;
+  } catch (e) {
+    console.error('[AI] Patch Tuesday analysis failed:', e.message);
+    return null;
+  }
+}
+
+async function runPatchTuesdayAiBothLanguages() {
+  const en = await runPatchTuesdayAiAnalysis('en');
+  const sv = await runPatchTuesdayAiAnalysis('sv');
+  return { en, sv };
+}
+
+// Return Patch Tuesday info + AI analysis
+app.get('/api/patchtuesday', (req, res) => {
+  try {
+    const nextPt = getNextPatchTuesday();
+    const language = req.query.lang === 'sv' ? 'sv' : 'en';
+    const analysis = db.getLatestAiAnalysis('patchtuesday', language);
+
+    res.json({
+      nextPatchTuesday: localDateStr(nextPt),
+      analysis: analysis ? analysis.analysis : null,
+      analysisGeneratedAt: analysis ? analysis.generated_at : null
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Manually trigger PT AI analysis
+app.post('/api/patchtuesday/analyze', (req, res) => {
+  runPatchTuesdayAiBothLanguages().then(result => {
+    if (result.en || result.sv) res.json({ ok: true, en: !!(result.en), sv: !!(result.sv) });
+    else res.json({ ok: false, error: 'Analysis failed or disabled — check server logs' });
+  }).catch(e => res.status(500).json({ ok: false, error: e.message }));
+});
+
+// =========================================================================
 //  TOOLS API ROUTES
 // =========================================================================
 const dns = require('dns');
@@ -1560,9 +1791,26 @@ function scheduleAiAnalysis() {
         await runAiAnalysisBothLanguages('yesterday');
       }
     }
+
+    // Patch Tuesday: run on the Monday before (day before PT) at 20:xx
+    // Also re-run on PT day itself at 08:xx for the freshest data
+    const nextPt = getNextPatchTuesday();
+    const ptDateStr = localDateStr(nextPt);
+    const dayBefore = new Date(nextPt);
+    dayBefore.setDate(dayBefore.getDate() - 1);
+    const dayBeforeStr = localDateStr(dayBefore);
+    const todayLocal = localDateStr(now);
+    const shouldRunPt = (todayLocal === dayBeforeStr && hour === 20) || (todayLocal === ptDateStr && hour === 8);
+    if (shouldRunPt) {
+      const lastPt = db.getLatestAiAnalysis('patchtuesday', 'en');
+      if (!lastPt || !lastPt.generated_at || lastPt.generated_at.slice(0, 10) !== todayLocal) {
+        console.log('[AI] Scheduled Patch Tuesday analysis starting...');
+        await runPatchTuesdayAiBothLanguages();
+      }
+    }
   }, 30 * 60 * 1000); // Check every 30 minutes
 
-  console.log('[AI] Analysis scheduled: daily (06:00), weekly (Sunday 23:59), monthly (last day 23:59)');
+  console.log('[AI] Analysis scheduled: daily (06:00), weekly (Sunday 23:59), monthly (last day 23:59), Patch Tuesday (Monday before + PT day)');
 }
 
 // =========================================================================

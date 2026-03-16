@@ -4,6 +4,84 @@ async function fetchJSON(url) {
   return r.json();
 }
 
+// --- Internationalization (i18n) ---
+let currentLang = localStorage.getItem('dashLang') || 'en';
+
+const i18n = {
+  en: {
+    report: 'Report', tools: 'Tools', patchTuesday: 'Patch Tuesday',
+    yesterday: 'Yesterday', lastWeek: 'Last Week', lastMonth: 'Last Month',
+    services: 'Services:', uptime: 'Uptime for lundstream.net:',
+    cvesPerDay: "CVE's per day:", vendors30: 'Most Targeted Vendors last 30 Days:',
+    latestCves: "Latest CVE's", news: 'News',
+    filter: 'Filter:', source: 'Source:',
+    searchCves: "Search CVE's...", searchNews: 'Search news...',
+    searchCveOrg: '     Search cve.org...',
+    loadMoreCves: "Load more CVE's", loadMoreNews: 'Load more news',
+    showMore: 'show more', showLess: 'show less',
+    descPending: 'Recently published \u2014 description pending'
+  },
+  sv: {
+    report: 'Rapport', tools: 'Verktyg', patchTuesday: 'Patch Tuesday',
+    yesterday: 'Ig\u00e5r', lastWeek: 'Senaste veckan', lastMonth: 'Senaste m\u00e5naden',
+    services: 'Tj\u00e4nster:', uptime: 'Drifttid f\u00f6r lundstream.net:',
+    cvesPerDay: 'CVE:er per dag:', vendors30: 'Mest drabbade leverant\u00f6rer senaste 30 dagarna:',
+    latestCves: 'Senaste CVE:er', news: 'Nyheter',
+    filter: 'Filter:', source: 'K\u00e4lla:',
+    searchCves: 'S\u00f6k CVE:er...', searchNews: 'S\u00f6k nyheter...',
+    searchCveOrg: '     S\u00f6k p\u00e5 cve.org...',
+    loadMoreCves: 'Ladda fler CVE:er', loadMoreNews: 'Ladda fler nyheter',
+    showMore: 'visa mer', showLess: 'visa mindre',
+    descPending: 'Nyligen publicerad \u2014 beskrivning inv\u00e4ntas'
+  }
+};
+
+function t(key) { return (i18n[currentLang] || i18n.en)[key] || (i18n.en)[key] || key; }
+
+function applyTranslations() {
+  const set = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = t(key); };
+  set('nav-report-label', 'report');
+  set('nav-tools-label', 'tools');
+  set('nav-pt-label', 'patchTuesday');
+  set('services-label', 'services');
+  set('uptime-label', 'uptime');
+  set('cve-chart-label', 'cvesPerDay');
+  set('vendor-donut-label', 'vendors30');
+  set('cve-heading-text', 'latestCves');
+  set('news-heading-text', 'news');
+  set('filter-label', 'filter');
+  set('source-label', 'source');
+  // dropdown items
+  document.querySelectorAll('.i18n-yesterday').forEach(el => el.textContent = t('yesterday'));
+  document.querySelectorAll('.i18n-week').forEach(el => el.textContent = t('lastWeek'));
+  document.querySelectorAll('.i18n-month').forEach(el => el.textContent = t('lastMonth'));
+  // placeholders
+  const cveSearch = document.getElementById('cve-search');
+  if (cveSearch) cveSearch.placeholder = t('searchCveOrg');
+  const cveSec = document.getElementById('cve-section-search');
+  if (cveSec) cveSec.placeholder = t('searchCves');
+  const newsSec = document.getElementById('news-section-search');
+  if (newsSec) newsSec.placeholder = t('searchNews');
+  // buttons
+  const cveMore = document.getElementById('cve-load-more');
+  if (cveMore) cveMore.textContent = t('loadMoreCves');
+  const newsMore = document.getElementById('news-load-more');
+  if (newsMore) newsMore.textContent = t('loadMoreNews');
+  // lang label
+  const langLabel = document.getElementById('lang-label');
+  if (langLabel) langLabel.textContent = currentLang.toUpperCase();
+}
+
+function setupLangToggle() {
+  const btn = document.getElementById('lang-toggle');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    currentLang = currentLang === 'en' ? 'sv' : 'en';
+    localStorage.setItem('dashLang', currentLang);
+    applyTranslations();
+  });
+}
+
 // client-side cache of loaded CVEs (pages appended here)
 window._cves = window._cves || [];
 
@@ -329,7 +407,7 @@ function renderCveItems(items) {
       summary = summary.slice(0, 300).replace(/\s+\S*$/, '') + '…';
       truncated = true;
     }
-    if (!summary) summary = 'Recently published \u2014 description pending';
+    if (!summary) summary = t('descPending');
     const zeroTag = /\bzero[- ]?day\b|\b0[- ]?day\b|zero\sday/i.test(fullSummary) ? '<span class="tag">Possible Zero-Day</span>' : '';
     // Render as: ID: Title  (link the ID when present). Fall back to title when no ID.
     let headHtml = '';
@@ -354,7 +432,7 @@ function renderCveItems(items) {
         <div>${headHtml}${zeroHtml}</div>
         <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • ${discoveredLine}Published: ${published}</div>
         <div class="cve-badges">${exploitBadge} ${patchBadge} ${kevBadge}</div>
-        <div class="desc">${truncated ? `<span class="desc-short">${escapeHtml(summary)}</span><span class="desc-full" hidden>${escapeHtml(fullSummary)}</span> <a href="#" class="show-more">show more</a>` : escapeHtml(summary)}</div>
+        <div class="desc">${truncated ? `<span class="desc-short">${escapeHtml(summary)}</span><span class="desc-full" hidden>${escapeHtml(fullSummary)}</span> <a href="#" class="show-more">${t('showMore')}</a>` : escapeHtml(summary)}</div>
       </div>
     `;
   }).join('');
@@ -456,7 +534,7 @@ async function loadNews(offsetArg) {
       news = await fetchJSON(url);
     } catch (e) {
       if (offset === 0) container.innerHTML = 'Error: ' + e.message;
-      if (btn) { btn.disabled = false; btn.textContent = 'Load more'; btn.dataset.available = 'false'; }
+      if (btn) { btn.disabled = false; btn.textContent = t('loadMoreNews'); btn.dataset.available = 'false'; }
       return;
     }
   }
@@ -477,7 +555,7 @@ async function loadNews(offsetArg) {
   newsOffset = offset + (Array.isArray(news) ? news.length : 0);
   if (btn) {
     btn.disabled = false;
-    btn.textContent = 'Load more';
+    btn.textContent = t('loadMoreNews');
     btn.dataset.available = (Array.isArray(news) && news.length === newsPageSize) ? 'true' : 'false';
     updateButtonVisibility(document.getElementById('news-list'), btn);
   }
@@ -518,7 +596,7 @@ async function loadCves(offsetArg) {
       cves = await fetchJSON(url);
     } catch (e) {
       container.innerHTML = 'Error: ' + e.message;
-      if (btn) { btn.disabled = false; btn.textContent = 'Load more'; btn.dataset.available = 'false'; }
+      if (btn) { btn.disabled = false; btn.textContent = t('loadMoreCves'); btn.dataset.available = 'false'; }
       return;
     }
   }
@@ -541,7 +619,7 @@ async function loadCves(offsetArg) {
   }
   if (btn) {
     btn.disabled = false;
-    btn.textContent = 'Load more';
+    btn.textContent = t('loadMoreCves');
     btn.dataset.available = (Array.isArray(cves) && cves.length === cvePageSize) ? 'true' : 'false';
     updateButtonVisibility(document.getElementById('cve-list'), btn);
   }
@@ -747,6 +825,8 @@ function init() {
   fetchAndRenderVendorDonut();
   loadTicker();
   setupThemeToggle();
+  setupLangToggle();
+  applyTranslations();
   // setup CVSS filter listener
   const sel = document.getElementById('cvss-filter');
   if(sel){ sel.addEventListener('change', () => { window._cvssMin = sel.value === 'all' ? null : Number(sel.value); cveOffset = 0; _cvePreloaded = null; _cvePreloading = false; loadCves(0); }); }
@@ -799,7 +879,7 @@ document.addEventListener('click', function(e) {
   const expanding = full.hidden;
   short.hidden = expanding;
   full.hidden = !expanding;
-  e.target.textContent = expanding ? 'show less' : 'show more';
+  e.target.textContent = expanding ? t('showLess') : t('showMore');
 });
 
 // --- header/status/chart helpers ---

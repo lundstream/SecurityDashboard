@@ -409,9 +409,67 @@ function setupEmailBreachTool() {
   input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 }
 
+// --- Internationalization (i18n) ---
+let currentLang = localStorage.getItem('dashLang') || 'en';
+
+const toolsI18n = {
+  en: {
+    dashboard: 'Dashboard', heading: 'Security Tools',
+    subtitle: 'Analyze, lookup and investigate security data.',
+    headers: { title: 'Website Analysis', desc: 'Enter a URL to analyze HTTP security headers.', btn: 'Analyze' },
+    dns: { title: 'DNS Record Lookup', desc: 'Retrieve A, AAAA, MX, and TXT records for a domain.', btn: 'Lookup' },
+    hash: { title: 'Malware Hash Checker', desc: 'Search for file hashes (MD5, SHA-1, SHA-256) in known threat databases.', btn: 'Check' },
+    ip: { title: 'IP Scout', desc: 'Geographic location, ISP, and network data for IP addresses.', btn: 'Scout' },
+    ports: { title: 'Port & Vulnerability Check', desc: 'Check open ports, services, and known vulnerabilities via Shodan.', btn: 'Scan' },
+    password: { title: 'Password Check', desc: 'Secure check against the Have I Been Pwned database. Your password never leaves the browser.', btn: 'Check' },
+    email: { title: 'Email Breach Check', desc: 'Check if an email address has been compromised in known data breaches via Have I Been Pwned.', btn: 'Check' }
+  },
+  sv: {
+    dashboard: 'Dashboard', heading: 'S\u00e4kerhetsverktyg',
+    subtitle: 'Analysera, sl\u00e5 upp och unders\u00f6k s\u00e4kerhetsdata.',
+    headers: { title: 'Webbanalys', desc: 'Ange en URL f\u00f6r att analysera HTTP-s\u00e4kerhetsrubriker.', btn: 'Analysera' },
+    dns: { title: 'DNS-uppslag', desc: 'H\u00e4mta A, AAAA, MX och TXT-poster f\u00f6r en dom\u00e4n.', btn: 'S\u00f6k' },
+    hash: { title: 'Skadlig kod-hashkontroll', desc: 'S\u00f6k efter filhashar (MD5, SHA-1, SHA-256) i k\u00e4nda hotdatabaser.', btn: 'Kontrollera' },
+    ip: { title: 'IP-sp\u00e5rning', desc: 'Geografisk plats, ISP och n\u00e4tverksdata f\u00f6r IP-adresser.', btn: 'Sp\u00e5ra' },
+    ports: { title: 'Port- & s\u00e5rbarhetskontroll', desc: 'Kontrollera \u00f6ppna portar, tj\u00e4nster och k\u00e4nda s\u00e5rbarheter via Shodan.', btn: 'Skanna' },
+    password: { title: 'L\u00f6senordskontroll', desc: 'S\u00e4ker kontroll mot Have I Been Pwned-databasen. Ditt l\u00f6senord l\u00e4mnar aldrig webbl\u00e4saren.', btn: 'Kontrollera' },
+    email: { title: 'E-postl\u00e4ckakontroll', desc: 'Se om en e-postadress har komprometterats i k\u00e4nda datal\u00e4ckor via Have I Been Pwned.', btn: 'Kontrollera' }
+  }
+};
+
+function applyToolsTranslations() {
+  const lang = toolsI18n[currentLang] || toolsI18n.en;
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set('nav-dashboard-label', lang.dashboard);
+  set('tools-heading', lang.heading);
+  set('tools-subtitle', lang.subtitle);
+  const tools = ['headers','dns','hash','ip','ports','password','email'];
+  tools.forEach(key => {
+    const t = lang[key]; if (!t) return;
+    document.querySelectorAll(`.tool-title[data-tool="${key}"]`).forEach(el => el.textContent = t.title);
+    document.querySelectorAll(`.tool-desc[data-tool="${key}"]`).forEach(el => el.textContent = t.desc);
+    const btn = document.getElementById(key + '-btn');
+    if (btn && !btn.disabled) { btn.textContent = t.btn; btn.dataset.label = t.btn; }
+  });
+  const langLabel = document.getElementById('lang-label');
+  if (langLabel) langLabel.textContent = currentLang.toUpperCase();
+}
+
+function setupLangToggle() {
+  const btn = document.getElementById('lang-toggle');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    currentLang = currentLang === 'en' ? 'sv' : 'en';
+    localStorage.setItem('dashLang', currentLang);
+    applyToolsTranslations();
+  });
+}
+
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
   setupThemeToggle();
+  setupLangToggle();
+  applyToolsTranslations();
   fetchPublicSettings();
   fetchVisitorIp();
   setupHeadersTool();

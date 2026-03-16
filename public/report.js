@@ -203,7 +203,7 @@ async function fetchPublicSettings() {
 let selectedVendors = [];
 let currentPeriod = 'month';
 let allVendors = [];
-let currentAiLang = localStorage.getItem('reportLang') || 'en';
+let currentAiLang = localStorage.getItem('dashLang') || 'en';
 
 // Load saved default vendor filter from localStorage
 (function loadDefaultVendors() {
@@ -687,7 +687,7 @@ function setupLangToggle() {
   updateLabel();
   btn.addEventListener('click', () => {
     currentAiLang = currentAiLang === 'en' ? 'sv' : 'en';
-    localStorage.setItem('reportLang', currentAiLang);
+    localStorage.setItem('dashLang', currentAiLang);
     updateLabel();
     loadAiAnalysis(currentAiLang);
     translateHeadings(currentAiLang);

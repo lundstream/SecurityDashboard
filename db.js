@@ -571,6 +571,44 @@ function trimOversizedBlobs(maxBytes) {
   return trimmed;
 }
 
+// --- Software Inventory helpers (Patch Tuesday) ---
+function initInventoryTable() {
+  getDb().exec(`
+    CREATE TABLE IF NOT EXISTS software_inventory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      vendor TEXT NOT NULL DEFAULT '',
+      version TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT 'other',
+      added_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  getDb().exec(`CREATE INDEX IF NOT EXISTS idx_inventory_vendor ON software_inventory(vendor COLLATE NOCASE)`);
+}
+
+function getInventory() {
+  initInventoryTable();
+  return getDb().prepare(`SELECT id, name, vendor, version, category, added_at FROM software_inventory ORDER BY vendor, name`).all();
+}
+
+function addInventoryItem(item) {
+  initInventoryTable();
+  const stmt = getDb().prepare(`INSERT INTO software_inventory (name, vendor, version, category) VALUES (?, ?, ?, ?)`);
+  const info = stmt.run(item.name || '', item.vendor || '', item.version || '', item.category || 'other');
+  return info.lastInsertRowid;
+}
+
+function updateInventoryItem(id, item) {
+  initInventoryTable();
+  getDb().prepare(`UPDATE software_inventory SET name=?, vendor=?, version=?, category=? WHERE id=?`)
+    .run(item.name || '', item.vendor || '', item.version || '', item.category || 'other', id);
+}
+
+function deleteInventoryItem(id) {
+  initInventoryTable();
+  getDb().prepare(`DELETE FROM software_inventory WHERE id=?`).run(id);
+}
+
 module.exports = {
   getDb,
   upsertCve, getCves, getCvesFiltered, getCveCount, purgeCves,
@@ -581,6 +619,7 @@ module.exports = {
   saveReport, getLatestReport, getReportCves, getReportStats, getTopVendors, getTopVendorsWithBreakdown, getVendorList,
   saveAiAnalysis, getLatestAiAnalysis, getRecentNews,
   searchCves, searchNews,
+  getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
   closeDb,
   vacuum, trimOversizedBlobs
 };

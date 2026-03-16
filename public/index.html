@@ -282,6 +282,11 @@
     #theme-toggle{background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;padding:6px;margin-left:12px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:color 0.2s}
     #theme-toggle:hover{color:#fff}
     #theme-toggle svg{width:20px;height:20px}
+    .lang-toggle-btn{background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);cursor:pointer;padding:4px 10px;margin-left:4px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:0.82em;font-weight:600;font-family:inherit}
+    .lang-toggle-btn:hover{color:#fff;border-color:rgba(255,255,255,0.2)}
+    .lang-toggle-btn svg{width:16px;height:16px}
+    html.light-theme .lang-toggle-btn{color:rgba(40,20,60,0.6);border-color:rgba(100,60,140,0.12)}
+    html.light-theme .lang-toggle-btn:hover{color:#1a0a2e;border-color:rgba(100,60,140,0.25)}
     /* Light theme overrides */
     html.light-theme{
       --bg-1:#f0edf5;
@@ -363,27 +368,29 @@
           <input id="cve-search" placeholder="     Search cve.org..." style="padding:6px 10px 6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:inherit;width:200px;font-size:0.85em">
         </div>
         <div class="report-dropdown" id="report-dropdown" style="margin-left:8px">
-          <button class="report-dropdown-btn" id="report-dropdown-btn" type="button"><i data-feather="file-text"></i> Report <i data-feather="chevron-down" style="width:12px;height:12px;opacity:0.5"></i></button>
+          <button class="report-dropdown-btn" id="report-dropdown-btn" type="button"><i data-feather="file-text"></i> <span id="nav-report-label">Report</span> <i data-feather="chevron-down" style="width:12px;height:12px;opacity:0.5"></i></button>
           <div class="report-dropdown-menu" id="report-dropdown-menu">
-            <a href="/report.html?period=yesterday"><i data-feather="clock"></i> Yesterday</a>
-            <a href="/report.html?period=week"><i data-feather="calendar"></i> Last Week</a>
-            <a href="/report.html?period=month"><i data-feather="calendar"></i> Last Month</a>
+            <a href="/report.html?period=yesterday"><i data-feather="clock"></i> <span class="i18n-yesterday">Yesterday</span></a>
+            <a href="/report.html?period=week"><i data-feather="calendar"></i> <span class="i18n-week">Last Week</span></a>
+            <a href="/report.html?period=month"><i data-feather="calendar"></i> <span class="i18n-month">Last Month</span></a>
           </div>
         </div>
         <div class="links-dropdown" id="links-dropdown" style="margin-left:4px">
           <button class="links-dropdown-btn" id="links-dropdown-btn" type="button"><i data-feather="external-link"></i> <span id="links-dropdown-label">Links</span> <i data-feather="chevron-down" style="width:12px;height:12px;opacity:0.5"></i></button>
           <div class="links-dropdown-menu" id="links-dropdown-menu"></div>
         </div>
-        <a href="/tools.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="tool"></i> Tools</a>
+        <a href="/tools.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="tool"></i> <span id="nav-tools-label">Tools</span></a>
+        <a href="/patchtuesday.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="calendar"></i> <span id="nav-pt-label">Patch Tuesday</span></a>
       </div>
     <div class="header-services" style="display:flex;gap:12px;align-items:center">
-      <div class="services-label" style="font-size:0.95em;color:var(--muted);margin-right:6px">Services:</div>
+      <div class="services-label" style="font-size:0.95em;color:var(--muted);margin-right:6px" id="services-label">Services:</div>
       <div class="service-badges" style="display:flex;gap:8px;align-items:center">
         <div id="svc-cloudflare" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Cloudflare</div></div>
         <div id="svc-aws" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">AWS</div></div>
         <div id="svc-microsoft" class="status-item"><span class="dot"></span><div style="font-size:0.85em;color:var(--muted)">Microsoft</div><div class="ms-tooltip" id="ms-tooltip">Loading...</div></div>
       </div>
       <button id="theme-toggle" aria-label="Toggle theme"><i data-feather="sun"></i></button>
+      <button id="lang-toggle" class="lang-toggle-btn" aria-label="Toggle language" title="Toggle language"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> <span id="lang-label">EN</span></button>
     </div>
   </header>
     <div id="ticker-bar"><div class="ticker-track" id="ticker-track"></div></div>
@@ -393,14 +400,14 @@
     <main id="main-content">
     <section class="top-panels" style="display:flex;gap:16px;margin-bottom:16px;align-items:flex-start">
     <div class="card" style="flex:1;padding:10px;border-radius:6px;display:flex;flex-direction:column;">
-      <div style="font-weight:600;margin-bottom:2px">Uptime for lundstream.net: <span id="uptime-pct" style="font-size:0.85em"></span></div>
+      <div style="font-weight:600;margin-bottom:2px"><span id="uptime-label">Uptime for lundstream.net:</span> <span id="uptime-pct" style="font-size:0.85em"></span></div>
       <div id="uptime-chart" class="chart-panel" style="height:120px;padding:2px 6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
         <canvas id="uptime-canvas"></canvas>
       </div>
     </div>
     <div class="card" style="flex:1;padding:10px;border-radius:6px;display:flex;flex-direction:column;">
       <div style="font-weight:600;margin-bottom:2px">
-        <span>CVE's per day:</span>
+        <span id="cve-chart-label">CVE's per day:</span>
       </div>
       <div id="cve-chart" class="chart-panel" style="height:120px;padding:2px 6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
         <canvas id="cve-canvas"></canvas>
@@ -408,7 +415,7 @@
     </div>
     <div id="useful-card" class="card" style="flex:1;padding:10px;border-radius:6px;display:flex;flex-direction:column;">
       <div style="flex:1;display:flex;flex-direction:column;">
-        <div style="font-weight:600">Most Targeted Vendors last 30 Days:</div>
+        <div style="font-weight:600" id="vendor-donut-label">Most Targeted Vendors last 30 Days:</div>
         <div style="height:120px;margin-top:4px;display:flex;align-items:center;justify-content:center">
           <canvas id="vendor-donut-canvas"></canvas>
         </div>
@@ -420,14 +427,14 @@
     <div class="left">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:0">
-          <h1 style="display:flex;align-items:center;margin-right:10px;white-space:nowrap"><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i>Latest CVE's</h1>
+          <h1 style="display:flex;align-items:center;margin-right:10px;white-space:nowrap" id="cve-heading"><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i><span id="cve-heading-text">Latest CVE's</span></h1>
           <div style="display:flex;align-items:center;position:relative">
             <span class="section-search-icon" style="position:absolute;left:7px;pointer-events:none;opacity:0.45;display:flex;align-items:center"><i data-feather="search" style="width:13px;height:13px"></i></span>
             <input id="cve-section-search" class="section-search" type="text" placeholder="Search CVE's..." style="padding:5px 8px 5px 26px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:inherit;font-size:0.82em;width:160px;box-sizing:border-box">
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
-          <label for="cvss-filter" style="font-size:0.95rem;color:var(--muted);margin-right:6px">Filter:</label>
+          <label for="cvss-filter" style="font-size:0.95rem;color:var(--muted);margin-right:6px" id="filter-label">Filter:</label>
           <div id="cvss-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
             <button id="cvss-dropdown-btn" class="filter-select" aria-expanded="false">All <span class="caret">▾</span></button>
             <ul id="cvss-dropdown-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true">
@@ -447,14 +454,14 @@
     <div class="right">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
         <div style="display:flex;align-items:center;gap:0">
-          <h1 style="margin-right:10px;white-space:nowrap"><i data-feather="book-open" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i>News</h1>
+          <h1 style="margin-right:10px;white-space:nowrap" id="news-heading"><i data-feather="book-open" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i><span id="news-heading-text">News</span></h1>
           <div style="display:flex;align-items:center;position:relative">
             <span class="section-search-icon" style="position:absolute;left:7px;pointer-events:none;opacity:0.45;display:flex;align-items:center"><i data-feather="search" style="width:13px;height:13px"></i></span>
             <input id="news-section-search" class="section-search" type="text" placeholder="Search news..." style="padding:5px 8px 5px 26px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:inherit;font-size:0.82em;width:160px;box-sizing:border-box">
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <label style="font-size:0.95rem;color:var(--muted);margin-right:6px">Source:</label>
+          <label style="font-size:0.95rem;color:var(--muted);margin-right:6px" id="source-label">Source:</label>
           <div id="news-source-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
             <button id="news-source-btn" class="filter-select" aria-expanded="false">All <span class="caret">▾</span></button>
             <ul id="news-source-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true">
