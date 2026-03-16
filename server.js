@@ -1121,6 +1121,31 @@ app.get('/api/top-vendors', (req, res) => {
 });
 
 // =========================================================================
+//  RISK-PRIORITY API
+// =========================================================================
+
+app.get('/api/risk-priority', (req, res) => {
+  const count = Math.min(parseInt(req.query.count || '15', 10), 100);
+  const offset = parseInt(req.query.offset || '0', 10);
+  const maxAge = Math.min(parseInt(req.query.maxAge || '90', 10), 365);
+  const vendor = req.query.vendor && req.query.vendor !== 'all' ? req.query.vendor : null;
+  const cacheKey = `risk:${count}:${offset}:${maxAge}:${vendor || ''}`;
+  cachedJson(res, cacheKey, 30000, () => db.getHighRiskCves(count, offset, maxAge, vendor));
+});
+
+app.get('/api/risk-vendors', (req, res) => {
+  const maxAge = Math.min(parseInt(req.query.maxAge || '90', 10), 365);
+  const cacheKey = `risk-vendors:${maxAge}`;
+  cachedJson(res, cacheKey, 60000, () => db.getRiskVendorStats(maxAge));
+});
+
+app.get('/api/vendor-list', (req, res) => {
+  const days = Math.min(parseInt(req.query.days || '90', 10), 365);
+  const cacheKey = `vendor-list:${days}`;
+  cachedJson(res, cacheKey, 60000, () => db.getVendorList(days));
+});
+
+// =========================================================================
 //  PATCH TUESDAY API
 // =========================================================================
 

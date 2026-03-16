@@ -261,7 +261,10 @@ function getCveCount() {
 
 function purgeCves(maxAgeDays) {
   const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
-  const info = getDb().prepare(`DELETE FROM cves WHERE published < ? AND published IS NOT NULL`).run(cutoff);
+  // Keep high-risk CVEs (KEV, exploited, or CVSS >= 8) for up to 1 year
+  const riskCutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+  const info = getDb().prepare(`DELETE FROM cves WHERE published < ? AND published IS NOT NULL
+    AND NOT (published >= ? AND (kev = 1 OR has_exploit = 1 OR cvss_score >= 8))`).run(cutoff, riskCutoff);
   return info.changes;
 }
 
@@ -609,6 +612,60 @@ function deleteInventoryItem(id) {
   getDb().prepare(`DELETE FROM software_inventory WHERE id=?`).run(id);
 }
 
+// --- Risk-priority helpers ---
+function getHighRiskCves(count, offset, maxAgeDays, vendor) {
+  const d = getDb();
+  const cutoff = new Date(Date.now() - (maxAgeDays || 90) * 24 * 60 * 60 * 1000).toISOString();
+  let where = `WHERE published >= ? AND published IS NOT NULL AND cvss_score IS NOT NULL`;
+  const params = [cutoff];
+  if (vendor) {
+    const vendors = Array.isArray(vendor) ? vendor : [vendor];
+    where += ` AND lower(vendor) IN (${vendors.map(() => '?').join(',')})`;
+    params.push(...vendors.map(v => v.toLowerCase()));
+  }
+  // Risk score: CVSS*10 + KEV*30 + exploit*20 + no-patch*15 + recency(0-15)
+  const sql = `SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered,
+    CAST(
+      (cvss_score * 10)
+      + (CASE WHEN kev = 1 THEN 30 ELSE 0 END)
+      + (CASE WHEN has_exploit = 1 THEN 20 ELSE 0 END)
+      + (CASE WHEN has_patch = 0 THEN 15 ELSE 0 END)
+      + (CASE WHEN julianday('now') - julianday(published) <= 7 THEN 15
+              WHEN julianday('now') - julianday(published) <= 30 THEN 10
+              WHEN julianday('now') - julianday(published) <= 90 THEN 5
+              ELSE 0 END)
+    AS REAL) as risk_score
+    FROM cves ${where}
+    ORDER BY risk_score DESC, cvss_score DESC, published DESC
+    LIMIT ? OFFSET ?`;
+  params.push(count || 15, offset || 0);
+  return d.prepare(sql).all(...params).map(row => {
+    const slim = slimCve(row);
+    slim._riskScore = Math.round(row.risk_score);
+    return slim;
+  });
+}
+
+function getRiskVendorStats(maxAgeDays) {
+  const d = getDb();
+  const cutoff = new Date(Date.now() - (maxAgeDays || 90) * 24 * 60 * 60 * 1000).toISOString();
+  return d.prepare(`SELECT UPPER(SUBSTR(MAX(vendor),1,1)) || SUBSTR(MAX(vendor),2) as vendor,
+    COUNT(*) as total,
+    ROUND(AVG(
+      (cvss_score * 10)
+      + (CASE WHEN kev = 1 THEN 30 ELSE 0 END)
+      + (CASE WHEN has_exploit = 1 THEN 20 ELSE 0 END)
+      + (CASE WHEN has_patch = 0 THEN 15 ELSE 0 END)
+    ), 1) as avg_risk,
+    SUM(CASE WHEN kev = 1 THEN 1 ELSE 0 END) as kev_count,
+    SUM(CASE WHEN has_exploit = 1 THEN 1 ELSE 0 END) as exploit_count
+    FROM cves WHERE published >= ? AND published IS NOT NULL AND cvss_score IS NOT NULL
+    AND vendor IS NOT NULL AND vendor != ''
+    GROUP BY vendor COLLATE NOCASE
+    ORDER BY avg_risk DESC, total DESC
+    LIMIT 10`).all(cutoff);
+}
+
 module.exports = {
   getDb,
   upsertCve, getCves, getCvesFiltered, getCveCount, purgeCves,
@@ -620,6 +677,7 @@ module.exports = {
   saveAiAnalysis, getLatestAiAnalysis, getRecentNews,
   searchCves, searchNews,
   getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
+  getHighRiskCves, getRiskVendorStats,
   closeDb,
   vacuum, trimOversizedBlobs
 };
