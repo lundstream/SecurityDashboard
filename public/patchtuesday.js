@@ -192,6 +192,8 @@ function mdToHtml(md) {
       if (olLiOpen && (stack.length === 0 || stack[stack.length - 1] === 'ol')) { html += '<ul>'; stack.push('ul'); olLiOpen = false; }
       if (stack.length === 0 || stack[stack.length - 1] !== 'ul') { closeAll(); html += '<ul>'; stack.push('ul'); }
       html += '<li>' + inlineMd(trimmed.slice(2)) + '</li>';
+    } else if (olLiOpen) {
+      html += '<br>' + inlineMd(trimmed);
     } else {
       closeAll();
       html += '<p>' + inlineMd(trimmed) + '</p>';

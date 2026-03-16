@@ -18,7 +18,7 @@ const nsI18n = {
   en: {
     dashboard: 'Dashboard',
     heading: 'News Summary',
-    subtitle: 'Weekly IT news analysis from a Swedish perspective — for IT consultants.',
+    subtitle: 'Weekly IT news analysis',
     aiHeading: 'AI News Analysis',
     noAnalysis: 'No AI analysis available yet. Analysis is generated automatically every week.',
     lastUpdated: 'Last updated',
@@ -28,7 +28,7 @@ const nsI18n = {
   sv: {
     dashboard: 'Dashboard',
     heading: 'Omvärldsanalys',
-    subtitle: 'Veckovis IT-nyhetsanalys ur ett svenskt perspektiv — för IT-konsulter.',
+    subtitle: 'Veckovis analys av IT-nyheter',
     aiHeading: 'AI-nyhetsanalys',
     noAnalysis: 'Ingen AI-analys tillgänglig ännu. Analysen genereras automatiskt varje vecka.',
     lastUpdated: 'Senast uppdaterad',
@@ -154,6 +154,8 @@ function mdToHtml(md) {
       if (olLiOpen && (stack.length === 0 || stack[stack.length - 1] === 'ol')) { html += '<ul>'; stack.push('ul'); olLiOpen = false; }
       if (stack.length === 0 || stack[stack.length - 1] !== 'ul') { closeAll(); html += '<ul>'; stack.push('ul'); }
       html += '<li>' + inlineMd(trimmed.slice(2)) + '</li>';
+    } else if (olLiOpen) {
+      html += '<br>' + inlineMd(trimmed);
     } else {
       closeAll();
       html += '<p>' + inlineMd(trimmed) + '</p>';

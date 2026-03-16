@@ -511,7 +511,7 @@ function getLatestAiAnalysis(period, language) {
 
 function getRecentNews(days) {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  return getDb().prepare(`SELECT title, source, pub_date as pubDate FROM news WHERE pub_date >= ? ORDER BY pub_date DESC LIMIT 50`).all(cutoff);
+  return getDb().prepare(`SELECT title, link, source, pub_date as pubDate FROM news WHERE pub_date >= ? ORDER BY pub_date DESC LIMIT 50`).all(cutoff);
 }
 
 function searchCves(query, limit) {

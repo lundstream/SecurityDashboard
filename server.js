@@ -1379,7 +1379,7 @@ function buildNewsSummaryAiPrompt(language) {
   const kevCves = db.getReportCves({ days: 7, kevOnly: true }).map(simplify);
 
   const newsSummary = news.map(n =>
-    `  [${n.source}] ${n.title}`
+    `  [${n.source}] ${n.title}${n.link ? ' — ' + n.link : ''}`
   ).join('\n');
 
   const kevSummary = kevCves.slice(0, 10).map(c =>
@@ -1395,11 +1395,12 @@ function buildNewsSummaryAiPrompt(language) {
   return `You are a senior IT analyst writing a weekly news briefing for Swedish IT consultants.
 ${langInstruction}
 
-Today's date is ${today}. Do NOT use placeholders like "[Insert Date]" — use the actual date provided.
+Today's date is ${today}.
 
-The target audience is IT consultants working in Sweden. Focus on the biggest IT and cybersecurity news from the past week. This is NOT a CVE report — keep CVE references to a minimum and only mention them when they are directly tied to a major news story. This should feel like a news summary / omvärldsanalys, not a vulnerability bulletin.
+The target audience is IT consultants working in Sweden. Focus on the biggest IT and cybersecurity news from the past week, with emphasis on Swedish sources such as CERT-SE, Computer Sweden, Dagens teknik, and IT-branschen. This is NOT a CVE report — keep CVE references to a minimum and only mention them when they are directly tied to a major news story. This should feel like a news summary / omvärldsanalys, not a vulnerability bulletin.
 
-IMPORTANT: When referencing news stories, include source links using markdown link format [source name](URL). Use real, well-known URLs for the sources (e.g. BleepingComputer, The Record, CERT-SE, Krebs on Security, The Register, etc.). Reference the source when discussing specific events.
+IMPORTANT: Do NOT start with a title, heading, date line, or introduction. Jump straight into the first section header.
+IMPORTANT: When referencing news stories, include source links using markdown link format [source name](URL). Use the actual article URLs provided in the DATA section below. Only if no URL is available for a story, use the source's main domain. Prioritize Swedish and Nordic sources when available.
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
 
