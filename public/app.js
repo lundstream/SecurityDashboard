@@ -10,6 +10,7 @@ let currentLang = localStorage.getItem('dashLang') || 'en';
 const i18n = {
   en: {
     report: 'CVE-report', tools: 'Tools', patchTuesday: 'Patch Tuesday', links: 'Links', newsSummary: 'News Summary',
+    tabNews: 'News', tabRisk: "Top-priority CVE's", tabCves: "Latest CVE's", tabPT: 'Patch Tuesday', tabNS: 'News Summary', tabTools: 'Tools',
     yesterday: 'Yesterday', lastWeek: 'Last Week', lastMonth: 'Last Month',
     services: 'Services:', uptime: 'Uptime for lundstream.net:',
     cvesPerDay: "CVE's per day:", vendors30: 'Most Targeted Vendors last 30 Days:',
@@ -29,6 +30,7 @@ const i18n = {
   },
   sv: {
     report: 'CVE-rapport', tools: 'Verktyg', patchTuesday: 'Patch-tisdag', links: 'Länkar', newsSummary: 'Omvärldsanalys',
+    tabNews: 'Nyheter', tabRisk: 'Prioriterade CVE:er', tabCves: 'Senaste CVE:er', tabPT: 'Patch-tisdag', tabNS: 'Omvärldsanalys', tabTools: 'Verktyg',
     yesterday: 'Ig\u00e5r', lastWeek: 'Senaste veckan', lastMonth: 'Senaste m\u00e5naden',
     services: 'Tj\u00e4nster:', uptime: 'Drifttid f\u00f6r lundstream.net:',
     cvesPerDay: 'CVE:er per dag:', vendors30: 'Mest drabbade leverant\u00f6rer senaste 30 dagarna:',
@@ -53,9 +55,6 @@ function t(key) { return (i18n[currentLang] || i18n.en)[key] || (i18n.en)[key] |
 function applyTranslations() {
   const set = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = t(key); };
   set('nav-report-label', 'report');
-  set('nav-tools-label', 'tools');
-  set('nav-pt-label', 'patchTuesday');
-  set('nav-ns-label', 'newsSummary');
   set('links-dropdown-label', 'links');
   set('services-label', 'services');
   set('uptime-label', 'uptime');
@@ -81,8 +80,13 @@ function applyTranslations() {
   if (cveMore) cveMore.textContent = t('loadMoreCves');
   const newsMore = document.getElementById('news-load-more');
   if (newsMore) newsMore.textContent = t('loadMoreNews');
-  // risk nav link
-  set('nav-risk-label', 'riskNav');
+  // tab nav labels
+  set('tab-news-label', 'tabNews');
+  set('tab-risk-label', 'tabRisk');
+  set('tab-cves-label', 'tabCves');
+  set('tab-pt-label', 'tabPT');
+  set('tab-ns-label', 'tabNS');
+  set('tab-tools-label', 'tabTools');
   // lang label
   const langLabel = document.getElementById('lang-label');
   if (langLabel) langLabel.textContent = currentLang.toUpperCase();
@@ -95,6 +99,14 @@ function setupLangToggle() {
     currentLang = currentLang === 'en' ? 'sv' : 'en';
     localStorage.setItem('dashLang', currentLang);
     applyTranslations();
+    // reload loaded iframes so they pick up the new language from localStorage
+    document.querySelectorAll('.tab-content iframe').forEach(iframe => {
+      try {
+        if (iframe.src && iframe.contentWindow) {
+          iframe.contentWindow.location.reload();
+        }
+      } catch (e) { /* not loaded yet — ignore */ }
+    });
   });
 }
 
@@ -467,6 +479,8 @@ function escapeHtml(s){
   return String(s).replace(/[&<>\"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; });
 }
 
+let _newsExtended = false;   // compact vs extended view
+
 function renderNewsItems(items) {
   if (!items || !items.length) return '';
   function fmt(dt) {
@@ -481,16 +495,19 @@ function renderNewsItems(items) {
     const mm = pad(d.getMinutes());
     return `${YYYY}-${MM}-${DD} ${hh}:${mm}`;
   }
+  function esc(s) { const el = document.createElement('span'); el.textContent = s; return el.innerHTML; }
   return items.map(it => {
     const title = it.title || '(no title)';
     const link = it.link || '#';
     const pubRaw = it.pubDate || it.updated || it.published || null;
     const pub = fmt(pubRaw);
     const src = it.source || '';
+    const desc = _newsExtended && it.description ? `<div class="news-desc">${esc(it.description)}</div>` : '';
     return `
       <div class="card">
         <div><a href="${link}" target="_blank" rel="noopener">${title}</a></div>
         <div class="meta">${src} • ${pub}</div>
+        ${desc}
       </div>
     `;
   }).join('');
@@ -678,12 +695,31 @@ const SOURCE_NAMES = {
   'https://www.schneier.com/blog/atom.xml': 'Schneier on Security',
   'https://www.reddit.com/r/netsec/.rss': 'r/netsec',
   'https://computersweden.se/feed/': 'Computer Sweden',
-  'https://neowin.net/news/rss/': 'Neowin',
-  'https://advania.se/feed/': 'Advania',
+  'https://www.neowin.net/rss/index.xml': 'Neowin',
+  'https://www.advania.se/nyheter/rss.xml': 'Advania',
+  'https://www.cert.se/feed/rss': 'CERT-SE',
+  'https://www.msb.se/sv/aktuellt/rss/': 'MSB',
 };
 function friendlySourceName(url) {
   if (SOURCE_NAMES[url]) return SOURCE_NAMES[url];
   try { const u = new URL(url); return u.hostname.replace(/^www\./, ''); } catch (e) { return url; }
+}
+
+// --- News view toggle (compact / extended) ---
+function setupNewsViewToggle() {
+  const btn = document.getElementById('news-view-toggle');
+  const label = document.getElementById('news-view-label');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    _newsExtended = !_newsExtended;
+    btn.classList.toggle('active', _newsExtended);
+    if (label) label.textContent = _newsExtended ? 'Compact' : 'Extended';
+    // Re-render current news
+    const container = document.getElementById('news-items');
+    if (container && _allNewsItems.length) {
+      container.innerHTML = renderNewsItems(_allNewsItems);
+    }
+  });
 }
 
 // --- News source filter dropdown ---
@@ -833,7 +869,11 @@ function init() {
   setupCveSearch();
   setupReportDropdown();
   setupLinksDropdown();
+  setupTabNav();
+  setupIframeAutoResize();
+  setupCardCollapse();
   setupNewsSourceFilter();
+  setupNewsViewToggle();
   setupNewsKeywordFilter();
   setupSectionSearch();
   fetchVisitorIp();
@@ -1000,6 +1040,96 @@ function setupLinksDropdown() {
 }
 
 // refresh service status periodically so UI updates when server cache changes
+
+// --- Tab navigation ---
+function setupTabNav() {
+  const nav = document.getElementById('tab-nav');
+  if (!nav) return;
+  const links = nav.querySelectorAll('a[data-tab]');
+  const iframeLoaded = { risk: true };
+  links.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const tab = link.getAttribute('data-tab');
+      // update active link
+      links.forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+      // show matching content, hide others
+      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+      const panel = document.getElementById('tab-content-' + tab);
+      if (panel) panel.classList.add('active');
+      // lazy-load iframe src on first visit
+      const iframe = panel && panel.querySelector('iframe[data-src]');
+      if (iframe && !iframeLoaded[tab]) {
+        iframe.src = iframe.getAttribute('data-src');
+        iframeLoaded[tab] = true;
+      }
+      // scroll back to top when switching tabs
+      const scrollWrap = document.getElementById('tab-scroll');
+      if (scrollWrap) scrollWrap.scrollTop = 0;
+      // re-sync iframe height for active tab
+      if (panel) {
+        const f = panel.querySelector('iframe');
+        if (f) resizeIframe(f);
+      }
+    });
+  });
+}
+
+// --- Auto-resize iframes to their content height (no inner scrollbar) ---
+function resizeIframe(iframe) {
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    if (!doc || !doc.body) return;
+    const h = doc.documentElement.scrollHeight || doc.body.scrollHeight;
+    if (h > 0) iframe.style.height = h + 'px';
+  } catch (e) { /* cross-origin guard */ }
+}
+
+function setupIframeAutoResize() {
+  const iframes = document.querySelectorAll('.tab-content iframe');
+  iframes.forEach(iframe => {
+    iframe.addEventListener('load', () => {
+      resizeIframe(iframe);
+      // Watch for content changes inside the iframe
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        if (doc && doc.body) {
+          const ro = new ResizeObserver(() => resizeIframe(iframe));
+          ro.observe(doc.body);
+        }
+      } catch (e) { /* cross-origin guard */ }
+    });
+    // If already loaded (e.g. risk iframe with src set)
+    if (iframe.src && iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+      resizeIframe(iframe);
+    }
+  });
+}
+
+// --- Collapse top cards when scrolling content ---
+function setupCardCollapse() {
+  const scroller = document.getElementById('tab-scroll');
+  const panels = document.querySelector('.top-panels');
+  if (!scroller || !panels) return;
+  const naturalH = panels.scrollHeight;
+  panels.style.maxHeight = naturalH + 'px';
+  let collapsed = false;
+  scroller.addEventListener('scroll', () => {
+    if (scroller.scrollTop > 10 && !collapsed) {
+      collapsed = true;
+      panels.style.maxHeight = '0px';
+      panels.style.marginBottom = '0px';
+      panels.style.opacity = '0';
+    } else if (scroller.scrollTop <= 0 && collapsed) {
+      collapsed = false;
+      panels.style.maxHeight = naturalH + 'px';
+      panels.style.marginBottom = '';
+      panels.style.opacity = '1';
+    }
+  });
+}
+
 setInterval(() => { try { fetchAndRenderStatus(); } catch (e) {} }, 60 * 1000);
 
 async function fetchAndRenderUptime(){

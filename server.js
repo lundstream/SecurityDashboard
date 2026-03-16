@@ -15,9 +15,9 @@ app.use(cors());
 
 // Security headers
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://flagcdn.com; connect-src 'self' https://api.pwnedpasswords.com; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://flagcdn.com; connect-src 'self' https://api.pwnedpasswords.com; frame-ancestors 'self'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
@@ -311,15 +311,22 @@ async function fetchAllFeeds() {
               || (blk.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i) || [])[1]
               || (blk.match(/<dc:date[^>]*>([\s\S]*?)<\/dc:date>/i) || [])[1]
               || '';
-      return { t: t.trim(), l: l.trim(), pd };
+      let desc = (blk.match(/<description[^>]*>([\s\S]*?)<\/description>/i) || [])[1]
+              || (blk.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i) || [])[1]
+              || (blk.match(/<content[^>]*>([\s\S]*?)<\/content>/i) || [])[1]
+              || '';
+      // Strip CDATA wrappers and HTML tags
+      desc = desc.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '').trim();
+      if (desc.length > 500) desc = desc.slice(0, 500);
+      return { t: t.trim(), l: l.trim(), pd, desc };
     };
-    const push = (t, l, pd) => {
+    const push = (t, l, pd, desc) => {
       if (!t || !l) return;
       const d = pd ? new Date(pd) : new Date();
-      items.push({ title: t, link: l, pubDate: isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString(), source });
+      items.push({ title: t, link: l, pubDate: isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString(), source, description: desc || '' });
     };
-    matchItems.forEach(b => { const { t, l, pd } = extract(b); push(t, l, pd); });
-    matchEntries.forEach(b => { const { t, l, pd } = extract(b); push(t, l, pd); });
+    matchItems.forEach(b => { const { t, l, pd, desc } = extract(b); push(t, l, pd, desc); });
+    matchEntries.forEach(b => { const { t, l, pd, desc } = extract(b); push(t, l, pd, desc); });
   }
   return items;
 }

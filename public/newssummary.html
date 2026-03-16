@@ -84,11 +84,23 @@
       .logo{width:40px;height:40px}
       .site-title{font-size:1rem}
     }
+    /* Embed mode: hide chrome when loaded in iframe */
+    /* Scrollbar style */
+    *{scrollbar-color:rgba(120,41,255,0.151) transparent;scrollbar-width:thin}
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:rgba(123,44,255,0.35);border-radius:10px;border:2px solid rgba(0,0,0,0.08)}
+    html.light-theme *{scrollbar-color:rgba(120,41,255,0.2) transparent}
+    html.light-theme ::-webkit-scrollbar-thumb{background:rgba(120,41,255,0.2)}
+    html.embed-mode header,html.embed-mode #site-footer,html.embed-mode #synthwave-canvas{display:none!important}
+    html.embed-mode body{background:transparent!important;overflow:hidden;height:auto}
+    html.embed-mode #main-content{position:relative;top:auto;bottom:auto;overflow:visible;padding:8px 0 0 0}
   </style>
 </head>
 <body>
   <canvas id="synthwave-canvas" style="position:fixed;inset:0;width:100%;height:100%;z-index:-1"></canvas>
   <script>if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light-theme');</script>
+  <script>if(new URLSearchParams(location.search).get('embed')==='1')document.documentElement.classList.add('embed-mode');</script>
   <header>
     <div style="display:flex;align-items:center;gap:10px">
       <a href="/" style="text-decoration:none"><div class="logo"><i data-feather="shield" style="vertical-align:middle"></i></div></a>

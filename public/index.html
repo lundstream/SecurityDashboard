@@ -93,6 +93,10 @@
       .footer-github{margin-top:2px}
       /* add small bottom gap under copyright on small screens */
       .copyright{display:block;margin-bottom:8px}
+      /* Responsive tabs */
+      .tab-nav{gap:4px}
+      .tab-nav a{padding:5px 10px;font-size:0.78em}
+      .tab-nav a svg{width:12px;height:12px}
     }
 
     /* Portrait / tall-narrow windows (desktop 9:16) */
@@ -137,6 +141,9 @@
       .footer-github{margin-top:4px}
       /* larger bottom gap under copyright for portrait/tall windows */
       .copyright{display:block;margin-bottom:16px}
+      /* Responsive tabs */
+      .tab-nav{gap:4px}
+      .tab-nav a{padding:5px 12px;font-size:0.82em}
     }
 
     /* Wide landscape (16:9 and wider) adjustments */
@@ -180,32 +187,16 @@
     /* buttons: single purple and brighter on hover */
     button{background:var(--accent-purple);color:#fff}
     button:hover{filter:brightness(1.18)}
-    .filter-select{
-      -webkit-appearance:none;
-      appearance:none;
-      background:var(--accent-purple);
-      color:#fff;
-      border:0;
-      padding:6px 10px;
-      border-radius:8px;
-      font-weight:600;
-      cursor:pointer;
-      box-shadow:0 6px 20px rgba(123,44,255,0.18);
-      background-repeat:no-repeat;
-      background-position:right 10px center;
-    }
-    /* hover should match search button hover (brightened purple) */
-    .filter-select:hover, .filter-select:focus{background:var(--accent-purple);filter:brightness(1.18);color:#fff}
-    .filter-select option{background:var(--accent-pink);color:#110428}
-    .filter-select option:hover, .filter-select option:focus{background:var(--accent-pink);color:#110428}
+    .filter-select{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:inherit;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.85em;font-family:inherit;display:flex;align-items:center;gap:4px}
+    .filter-select:hover{border-color:rgba(255,255,255,0.2)}
+    .caret{font-size:0.7em;opacity:0.5}
     /* custom dropdown menu (replaces native select) */
     .cvss-dropdown{position:relative;display:inline-block}
-    /* menu background set to purple; hover brightens to match search button hover */
-    .cvss-dropdown-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:120px;padding:8px;border-radius:10px;list-style:none;margin:0;box-shadow:0 10px 26px rgba(25,6,60,0.45);background:var(--accent-purple);z-index:30;display:none}
+    .cvss-dropdown-menu{display:none;position:absolute;top:100%;right:0;left:auto;margin-top:4px;background:#2f003b;border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:120px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);overflow:hidden;list-style:none;padding:0;margin:0}
     .cvss-dropdown-menu[aria-hidden="false"]{display:block}
-    .cvss-option{padding:8px 10px;border-radius:8px;color:#fff;margin:6px 0;cursor:pointer;font-weight:600}
-    .cvss-option:hover{background:var(--accent-purple);filter:brightness(1.18);color:#fff}
-    .cvss-option[aria-selected="true"]{background:rgba(255,255,255,0.04);color:#fff}
+    .cvss-option{padding:8px 14px;cursor:pointer;font-size:0.85em;transition:background 0.1s}
+    .cvss-option:hover{background:rgba(255,255,255,0.06)}
+    .cvss-option[aria-selected="true"]{background:rgba(132,0,255,0.15)}
     /* cards: subtle hover brighten (no movement on hover) */
     /* make hover state immediate and persistent while hovered */
     .card{transition:none}
@@ -222,7 +213,7 @@
     .show-more:hover{text-decoration:underline}
 
     /* Microsoft tooltip */
-    .ms-tooltip{display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 14px;z-index:200;min-width:220px;box-shadow:0 10px 30px rgba(11,3,28,0.6);white-space:nowrap}
+    .ms-tooltip{display:none;position:absolute;top:calc(100% + 8px);right:0;background:#2f003b;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 14px;z-index:200;min-width:220px;box-shadow:0 10px 30px rgba(11,3,28,0.6);white-space:nowrap}
     .ms-tooltip .ms-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.85em;color:var(--muted)}
     .ms-tooltip .ms-row .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
     #svc-microsoft{position:relative}
@@ -255,8 +246,9 @@
     html.light-theme #ticker-bar{background:rgba(240,237,245,0.95);border-bottom-color:rgba(100,60,140,0.1)}
     html.light-theme #ticker-bar .ticker-track a{color:rgba(40,20,60,0.6)}
     html.light-theme #ticker-bar .ticker-track a:hover{color:#1a0a2e}
-    #main-content{position:fixed;top:calc(var(--header-height) + 28px);bottom:var(--footer-height);left:0;right:0;display:flex;flex-direction:column;padding:8px 20px;box-sizing:border-box;overflow-y:auto;overflow-x:hidden}
-    .top-panels{flex-shrink:0}
+    #main-content{position:fixed;top:calc(var(--header-height) + 28px);bottom:var(--footer-height);left:0;right:0;display:flex;flex-direction:column;padding:8px 20px;box-sizing:border-box;overflow:hidden}
+    .top-panels{flex-shrink:0;max-width:1100px;width:100%;margin-left:auto;margin-right:auto;overflow:hidden;transition:max-height 0.3s ease,margin-bottom 0.3s ease,opacity 0.3s ease}
+    .top-panels > .card{flex:1 1 0% !important;min-width:0}
 
     /* Header search */
     #header-search{position:relative}
@@ -268,14 +260,14 @@
     .report-dropdown-btn{display:inline-flex;align-items:center;gap:4px;font-size:0.82em;color:var(--muted);background:transparent;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:color 0.15s}
     .report-dropdown-btn:hover{color:#fff}
     .report-dropdown-btn svg{width:14px;height:14px}
-    .report-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:150px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);backdrop-filter:blur(12px);overflow:hidden}
+    .report-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:#2f003b;border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:150px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);overflow:hidden}
     .report-dropdown-menu.open{display:block}
     .report-dropdown-menu a{display:flex;align-items:center;gap:8px;padding:10px 14px;color:#efe8ff;text-decoration:none;font-size:0.85em;font-weight:500;transition:background 0.12s}
     .report-dropdown-menu a:hover{background:rgba(255,255,255,0.06)}
     .report-dropdown-menu a svg{width:14px;height:14px;opacity:0.6}
     html.light-theme .report-dropdown-btn{color:rgba(40,20,60,0.6)}
     html.light-theme .report-dropdown-btn:hover{color:rgba(40,20,60,0.88)}
-    html.light-theme .report-dropdown-menu{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12);box-shadow:0 8px 24px rgba(100,60,140,0.15)}
+    html.light-theme .report-dropdown-menu{background:#ffffff;border-color:rgba(100,60,140,0.12);box-shadow:0 8px 24px rgba(100,60,140,0.15)}
     html.light-theme .report-dropdown-menu a{color:#1a0a2e}
     html.light-theme .report-dropdown-menu a:hover{background:rgba(100,60,140,0.06)}
     /* Theme toggle button */
@@ -308,7 +300,9 @@
     html.light-theme .status-item{background:rgba(255,255,255,0.7);border:1px solid rgba(100,60,140,0.08)}
     html.light-theme .status-item:hover{background:rgba(20, 0, 43, 0.055);box-shadow:0 2px 8px rgba(100,60,140,0.12)}
     html.light-theme button:not(.report-dropdown-btn):not(.links-dropdown-btn):not(.lang-toggle-btn):not(#theme-toggle){background:var(--accent-purple);color:#fff}
-    html.light-theme .cvss-dropdown-menu{background:var(--accent-purple)}
+    html.light-theme .filter-select{background:rgba(100,60,140,0.06);border-color:rgba(100,60,140,0.12);color:#1a0a2e}
+    html.light-theme .cvss-dropdown-menu{background:#ffffff;border-color:rgba(100,60,140,0.12)}
+    html.light-theme .cvss-option:hover{background:rgba(100,60,140,0.06)}
     html.light-theme #cve-items a,html.light-theme #news-items a{color:#1a0a2e}
     html.light-theme #cve-items a:hover,html.light-theme #news-items a:hover{color:#8400ff}
     html.light-theme .footer-github,html.light-theme .footer-github span{color:rgba(40,20,60,0.75) !important}
@@ -320,7 +314,7 @@
     html.light-theme #header-search input{background:rgba(100,60,140,0.06) !important;border:1px solid rgba(25, 0, 49, 0.295) !important;color:#1a0a2e;outline-color:rgba(40,20,60,0.6)}
     html.light-theme #header-search input:focus{border-color:rgba(40,20,60,0.6) !important;outline-color:rgba(40,20,60,0.6)}
     html.light-theme .section-search{background:rgba(100,60,140,0.06);border-color:rgba(100,60,140,0.12);color:#1a0a2e}
-    html.light-theme .ms-tooltip{background:rgba(255,255,255,0.95);border:1px solid rgba(100,60,140,0.1)}
+    html.light-theme .ms-tooltip{background:#ffffff;border:1px solid rgba(100,60,140,0.1)}
     html.light-theme .ms-tooltip .ms-row{color:rgba(40,20,60,0.7)}
     html.light-theme .list-scroll{scrollbar-color:rgba(120,41,255,0.2) transparent}
     html.light-theme .list-scroll::-webkit-scrollbar-thumb{background:rgba(120,41,255,0.2)}
@@ -334,14 +328,14 @@
     .links-dropdown-btn{display:inline-flex;align-items:center;gap:4px;font-size:0.82em;color:var(--muted);background:transparent;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:color 0.15s}
     .links-dropdown-btn:hover{color:#fff}
     .links-dropdown-btn svg{width:14px;height:14px}
-    .links-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:240px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);backdrop-filter:blur(12px);overflow:hidden}
+    .links-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:#2f003b;border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:240px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);overflow:hidden}
     .links-dropdown-menu.open{display:block}
     .links-dropdown-menu a{display:flex;align-items:center;gap:8px;padding:10px 14px;color:#efe8ff;text-decoration:none;font-size:0.85em;font-weight:500;transition:background 0.12s}
     .links-dropdown-menu a:hover{background:rgba(255,255,255,0.06)}
     .links-dropdown-menu a svg{width:14px;height:14px;opacity:0.6}
     html.light-theme .links-dropdown-btn{color:rgba(40,20,60,0.6)}
     html.light-theme .links-dropdown-btn:hover{color:rgba(40,20,60,0.88)}
-    html.light-theme .links-dropdown-menu{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12);box-shadow:0 8px 24px rgba(100,60,140,0.15)}
+    html.light-theme .links-dropdown-menu{background:#ffffff;border-color:rgba(100,60,140,0.12);box-shadow:0 8px 24px rgba(100,60,140,0.15)}
     html.light-theme .links-dropdown-menu a{color:#1a0a2e}
     html.light-theme .links-dropdown-menu a:hover{background:rgba(100,60,140,0.06)}
     /* CVE enrichment badges */
@@ -354,6 +348,42 @@
     .badge-nopatch{background:rgba(255,77,77,0.12);color:#ff6b6b}
     html.light-theme .badge-no{background:rgba(40,20,60,0.06);color:rgba(40,20,60,0.5)}
     html.light-theme .badge-nopatch{background:rgba(200,40,40,0.08);color:#c0392b}
+
+    /* Tab navigation row (card style) */
+    .tab-nav{display:flex;justify-content:center;gap:6px;margin-bottom:0;flex-shrink:0;flex-wrap:wrap;background:var(--card-bg);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:8px 12px;box-shadow:0 6px 18px rgba(11,3,28,0.45);align-self:center;z-index:100}
+    .tab-nav-wrap{flex-shrink:0;display:flex;flex-direction:column;align-items:center;padding-bottom:24px}
+    .tab-nav a{padding:7px 18px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:600;font-size:0.88em;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;transition:color 0.15s}
+    .tab-nav a:hover{color:#fff}
+    .tab-nav a.active{color:#fff;background:rgba(255,255,255,0.08)}
+    .tab-nav a svg{width:14px;height:14px}
+    html.light-theme .tab-nav{background:var(--card-bg);border:1px solid rgba(100,60,140,0.1);box-shadow:0 4px 12px rgba(100,60,140,0.08)}
+    html.light-theme .tab-nav a{color:rgba(40,20,60,0.55)}
+    html.light-theme .tab-nav a:hover{color:#1a0a2e}
+    html.light-theme .tab-nav a.active{color:#1a0a2e;background:rgba(40,20,60,0.07)}
+
+    /* Global scrollbar style (matching news section) */
+    *{scrollbar-color:rgba(120,41,255,0.151) transparent;scrollbar-width:thin}
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:rgba(123,44,255,0.35);border-radius:10px;border:2px solid rgba(0,0,0,0.08)}
+    html.light-theme *{scrollbar-color:rgba(120,41,255,0.2) transparent}
+    html.light-theme ::-webkit-scrollbar-thumb{background:rgba(120,41,255,0.2)}
+
+    /* Tab content scroll wrapper */
+    #tab-scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
+
+    /* Tab content panels */
+    .tab-content{display:none;max-width:1100px;width:100%;margin:0 auto}
+    .tab-content.active{display:flex;flex-direction:column}
+    .tab-content iframe{border:none;width:100%}
+    .tab-content .list-scroll{overflow:visible;flex:none}
+    .news-view-toggle{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--muted);font-size:0.82em;cursor:pointer;transition:background 0.15s,color 0.15s}
+    .news-view-toggle:hover{background:rgba(255,255,255,0.08);color:#fff}
+    .news-view-toggle.active{background:rgba(120,41,255,0.15);border-color:rgba(120,41,255,0.3);color:var(--accent-purple)}
+    html.light-theme .news-view-toggle{border-color:rgba(0,0,0,0.1);background:rgba(0,0,0,0.03)}
+    html.light-theme .news-view-toggle:hover{background:rgba(0,0,0,0.06);color:#222}
+    html.light-theme .news-view-toggle.active{background:rgba(120,41,255,0.1);border-color:rgba(120,41,255,0.25)}
+    .news-desc{margin-top:4px;font-size:0.85em;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
   </style>
 </head>
 <body>
@@ -373,16 +403,12 @@
             <a href="/report.html?period=yesterday"><i data-feather="clock"></i> <span class="i18n-yesterday">Yesterday</span></a>
             <a href="/report.html?period=week"><i data-feather="calendar"></i> <span class="i18n-week">Last Week</span></a>
             <a href="/report.html?period=month"><i data-feather="calendar"></i> <span class="i18n-month">Last Month</span></a>
-            <a href="/risk.html"><i data-feather="trending-up"></i> <span id="nav-risk-label">Top-priority CVE's</span></a>
           </div>
         </div>
         <div class="links-dropdown" id="links-dropdown" style="margin-left:4px">
           <button class="links-dropdown-btn" id="links-dropdown-btn" type="button"><i data-feather="external-link"></i> <span id="links-dropdown-label">Links</span> <i data-feather="chevron-down" style="width:12px;height:12px;opacity:0.5"></i></button>
           <div class="links-dropdown-menu" id="links-dropdown-menu"></div>
         </div>
-        <a href="/tools.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="tool"></i> <span id="nav-tools-label">Tools</span></a>
-        <a href="/patchtuesday.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="download"></i> <span id="nav-pt-label">Patch Tuesday</span></a>
-        <a href="/newssummary.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="globe"></i> <span id="nav-ns-label">News Summary</span></a>
       </div>
     <div class="header-services" style="display:flex;gap:12px;align-items:center">
       <div class="services-label" style="font-size:0.95em;color:var(--muted);margin-right:6px" id="services-label">Services:</div>
@@ -400,7 +426,7 @@
     <canvas id="synthwave-canvas" style="position:fixed;inset:0;width:100%;height:100%;z-index:-1"></canvas>
     <!-- Info panels row -->
     <main id="main-content">
-    <section class="top-panels" style="display:flex;gap:16px;margin-bottom:16px;align-items:flex-start">
+    <section class="top-panels" style="display:flex;gap:16px;margin-bottom:16px;align-items:stretch">
     <div class="card" style="flex:1;padding:10px;border-radius:6px;display:flex;flex-direction:column;">
       <div style="font-weight:600;margin-bottom:2px"><span id="uptime-label">Uptime for lundstream.net:</span> <span id="uptime-pct" style="font-size:0.85em"></span></div>
       <div id="uptime-chart" class="chart-panel" style="height:120px;padding:2px 6px;border-radius:6px;display:flex;align-items:center;justify-content:center">
@@ -425,8 +451,51 @@
     </div>
   </section>
 
-  <div class="container">
-    <div class="left">
+  <!-- Tab navigation row -->
+  <div class="tab-nav-wrap">
+  <nav class="tab-nav" id="tab-nav">
+    <a href="#" class="active" data-tab="risk"><i data-feather="trending-up"></i> <span id="tab-risk-label">Top-priority CVE's</span></a>
+    <a href="#" data-tab="news"><i data-feather="rss"></i> <span id="tab-news-label">News</span></a>
+    <a href="#" data-tab="cves"><i data-feather="alert-triangle"></i> <span id="tab-cves-label">Latest CVE's</span></a>
+    <a href="#" data-tab="patchtuesday"><i data-feather="download"></i> <span id="tab-pt-label">Patch Tuesday</span></a>
+    <a href="#" data-tab="newssummary"><i data-feather="globe"></i> <span id="tab-ns-label">News Summary</span></a>
+    <a href="#" data-tab="tools"><i data-feather="tool"></i> <span id="tab-tools-label">Tools</span></a>
+  </nav>
+  </div>
+
+  <div id="tab-scroll">
+  <!-- Tab: News -->
+  <div class="tab-content" id="tab-content-news">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:0">
+          <h1 style="display:flex;align-items:center;margin-right:10px;white-space:nowrap" id="news-heading"><i data-feather="book-open" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i><span id="news-heading-text">News</span></h1>
+          <div style="display:flex;align-items:center;position:relative">
+            <span class="section-search-icon" style="position:absolute;left:7px;pointer-events:none;opacity:0.45;display:flex;align-items:center"><i data-feather="search" style="width:13px;height:13px"></i></span>
+            <input id="news-section-search" class="section-search" type="text" placeholder="Search news..." style="padding:5px 8px 5px 26px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:inherit;font-size:0.82em;width:160px;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button id="news-view-toggle" class="news-view-toggle" title="Toggle extended view">
+            <i data-feather="align-left" style="width:13px;height:13px"></i>
+            <span id="news-view-label">Extended</span>
+          </button>
+          <label style="font-size:0.95rem;color:var(--muted);margin-right:6px" id="source-label">Source:</label>
+          <div id="news-source-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
+            <button id="news-source-btn" class="filter-select" aria-expanded="false">All <span class="caret">▾</span></button>
+            <ul id="news-source-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true">
+              <li class="cvss-option" data-value="all" role="option" aria-selected="true">All</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div id="news-list" class="list-scroll">
+        <div id="news-items">Loading...</div>
+        <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="news-load-more" style="display:none">Load more news</button></div>
+      </div>
+  </div><!-- /tab-content-news -->
+
+  <!-- Tab: Latest CVE's -->
+  <div class="tab-content" id="tab-content-cves">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:0">
           <h1 style="display:flex;align-items:center;margin-right:10px;white-space:nowrap" id="cve-heading"><i data-feather="alert-triangle" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i><span id="cve-heading-text">Latest CVE's</span></h1>
@@ -452,33 +521,28 @@
         <div id="cve-items">Loading...</div>
         <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="cve-load-more" style="display:none">Load more CVE's</button></div>
       </div>
-    </div>
-    <div class="right">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-        <div style="display:flex;align-items:center;gap:0">
-          <h1 style="margin-right:10px;white-space:nowrap" id="news-heading"><i data-feather="book-open" style="vertical-align:middle;margin-right:8px;color:var(--accent-pink)"></i><span id="news-heading-text">News</span></h1>
-          <div style="display:flex;align-items:center;position:relative">
-            <span class="section-search-icon" style="position:absolute;left:7px;pointer-events:none;opacity:0.45;display:flex;align-items:center"><i data-feather="search" style="width:13px;height:13px"></i></span>
-            <input id="news-section-search" class="section-search" type="text" placeholder="Search news..." style="padding:5px 8px 5px 26px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:inherit;font-size:0.82em;width:160px;box-sizing:border-box">
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <label style="font-size:0.95rem;color:var(--muted);margin-right:6px" id="source-label">Source:</label>
-          <div id="news-source-dropdown" class="cvss-dropdown" aria-haspopup="listbox">
-            <button id="news-source-btn" class="filter-select" aria-expanded="false">All <span class="caret">▾</span></button>
-            <ul id="news-source-menu" class="cvss-dropdown-menu" role="listbox" aria-hidden="true">
-              <li class="cvss-option" data-value="all" role="option" aria-selected="true">All</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      <div id="news-list" class="list-scroll">
-        <div id="news-items">Loading...</div>
-        <div class="list-footer" style="text-align:center;padding:8px 0;"><button id="news-load-more" style="display:none">Load more news</button></div>
-      </div>
-    </div>
+  </div><!-- /tab-content-cves -->
+
+  <!-- Tab: Top-priority CVE's -->
+  <div class="tab-content active" id="tab-content-risk">
+    <iframe id="iframe-risk" src="/risk.html?embed=1" scrolling="no"></iframe>
   </div>
+
+  <!-- Tab: Patch Tuesday -->
+  <div class="tab-content" id="tab-content-patchtuesday">
+    <iframe id="iframe-patchtuesday" data-src="/patchtuesday.html?embed=1" scrolling="no"></iframe>
   </div>
+
+  <!-- Tab: News Summary -->
+  <div class="tab-content" id="tab-content-newssummary">
+    <iframe id="iframe-newssummary" data-src="/newssummary.html?embed=1" scrolling="no"></iframe>
+  </div>
+
+  <!-- Tab: Tools -->
+  <div class="tab-content" id="tab-content-tools">
+    <iframe id="iframe-tools" data-src="/tools.html?embed=1" scrolling="no"></iframe>
+  </div>
+  </div><!-- /tab-scroll -->
 
   <script src="/app.js"></script>
   <script>

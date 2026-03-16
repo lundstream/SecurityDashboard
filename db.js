@@ -65,6 +65,8 @@ function initTables() {
   try { d.exec(`ALTER TABLE cves ADD COLUMN discovered TEXT`); } catch (e) {}
   // Migration: add language column to ai_analysis if missing
   try { d.exec(`ALTER TABLE ai_analysis ADD COLUMN language TEXT NOT NULL DEFAULT 'en'`); } catch (e) {}
+  // Migration: add description column to news if missing
+  try { d.exec(`ALTER TABLE news ADD COLUMN description TEXT DEFAULT ''`); } catch (e) {}
 
   // KEV (Known Exploited Vulnerabilities) cache
   d.exec(`
@@ -274,19 +276,19 @@ function upsertNews(item) {
   // Use link as id (most unique)
   const id = item.link || (item.title + '|' + item.source);
   const stmt = d.prepare(`
-    INSERT INTO news (id, title, link, pub_date, source) VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET title=excluded.title, pub_date=excluded.pub_date
+    INSERT INTO news (id, title, link, pub_date, source, description) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET title=excluded.title, pub_date=excluded.pub_date, description=COALESCE(excluded.description, news.description)
   `);
-  stmt.run(id, item.title || '', item.link || '', item.pubDate || item.pub_date || null, item.source || '');
+  stmt.run(id, item.title || '', item.link || '', item.pubDate || item.pub_date || null, item.source || '', item.description || '');
 }
 
 function getNews(count, offset, sources) {
   const d = getDb();
   if (sources && sources.length > 0) {
     const placeholders = sources.map(() => '?').join(',');
-    return d.prepare(`SELECT title, link, pub_date as pubDate, source FROM news WHERE source IN (${placeholders}) ORDER BY pub_date DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(...sources, count, offset);
+    return d.prepare(`SELECT title, link, pub_date as pubDate, source, description FROM news WHERE source IN (${placeholders}) ORDER BY pub_date DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(...sources, count, offset);
   }
-  return d.prepare(`SELECT title, link, pub_date as pubDate, source FROM news ORDER BY pub_date DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(count, offset);
+  return d.prepare(`SELECT title, link, pub_date as pubDate, source, description FROM news ORDER BY pub_date DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(count, offset);
 }
 
 function getNewsSources() {
@@ -526,7 +528,7 @@ function searchCves(query, limit) {
 function searchNews(query, limit) {
   const d = getDb();
   const like = '%' + query + '%';
-  return d.prepare(`SELECT title, link, pub_date as pubDate, source FROM news WHERE title LIKE ? OR source LIKE ? ORDER BY pub_date DESC LIMIT ?`).all(like, like, limit);
+  return d.prepare(`SELECT title, link, pub_date as pubDate, source, description FROM news WHERE title LIKE ? OR source LIKE ? ORDER BY pub_date DESC LIMIT ?`).all(like, like, limit);
 }
 
 // --- Maintenance ---
