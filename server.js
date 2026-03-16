@@ -1389,20 +1389,22 @@ The target audience is IT consultants working in Sweden. Write from a Swedish pe
 
 IMPORTANT: Do NOT start with a title, heading, date line, or introduction. Jump straight into the first section header.
 IMPORTANT: Write in flowing prose paragraphs, not bullet lists. Use bullet lists only when listing specific items (e.g. a list of tools, patches, or recommendations). The main news coverage should read like a professional news briefing with paragraphs, not a bullet-point summary.
-IMPORTANT: Do NOT include any source links or URLs. Just mention source names in plain text when relevant.
+IMPORTANT: Always be SPECIFIC. Never use vague references like "a Swedish retail giant", "a major Swedish university", or "a leading Nordic bank". Always name the actual organization, company, product, or person involved. If you are unsure of the specific name, skip that story rather than being vague.
+IMPORTANT: For each story, mention the source name in plain text (e.g. "according to BleepingComputer", "CERT-SE reported", "Computer Sweden rapporterar"). Do NOT include URLs or links, only the source name.
+IMPORTANT: Do NOT add advice filler like "IT consultants should prioritize..." or "IT-konsulter bör...". Just report the news factually. The reader can draw their own conclusions.
 
 STRUCTURE YOUR RESPONSE WITH THESE SECTIONS (use markdown headers ##):
 
 ## ${language === 'sv' ? 'Veckans viktigaste IT-nyheter' : "This Week's Top IT News"}
-Cover the 10 biggest IT and cybersecurity news stories of the past week from a Swedish perspective. Use ### subheadings for each story, followed by a paragraph of 2-4 sentences explaining what happened and why it matters for Swedish IT professionals. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends.
+Cover the 10 biggest IT and cybersecurity news stories of the past week from a Swedish perspective. Use ### subheadings for each story, followed by a paragraph of 2-4 sentences explaining what happened and why it matters. Cover breaches, major vendor announcements, policy changes, threat actor activity, and industry trends. Always name specific organizations, products, and people.
 
 ## ${language === 'sv' ? 'Branschtrender och utveckling' : 'Industry Trends & Developments'}
-Cover notable technology trends, AI developments, cloud/infrastructure changes, regulatory updates (NIS2, GDPR enforcement, EU Cyber Resilience Act), and market movements relevant to IT consultants. Focus on what consultants need to know to advise their clients.
+Cover notable technology trends, AI developments, cloud/infrastructure changes, regulatory updates (NIS2, GDPR enforcement, EU Cyber Resilience Act), and market movements relevant to the Swedish IT industry.
 
 ## ${language === 'sv' ? 'Hot och aktörer' : 'Threats & Actors'}
-Brief overview of notable threat actor activity, ransomware campaigns, phishing trends, or supply chain attacks from the week. Keep it high-level and actionable — what should IT consultants warn their clients about?
+Brief overview of notable threat actor activity, ransomware campaigns, phishing trends, or supply chain attacks from the week. Name the specific threat groups, malware families, and targeted sectors.
 
-Aim for approximately 1200-1600 words. Be informative and professional. Write from a Swedish IT industry perspective even when discussing global events.`;
+Aim for approximately 1200-1600 words. Be informative, factual, and professional. Write from a Swedish IT industry perspective even when discussing global events.`;
 }
 
 async function runNewsSummaryAiAnalysis(language) {
