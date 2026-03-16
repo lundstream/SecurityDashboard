@@ -265,16 +265,16 @@
     #header-search input{padding-left:28px}
     /* Report dropdown */
     .report-dropdown{position:relative;display:inline-flex}
-    .report-dropdown-btn{display:inline-flex;align-items:center;gap:4px;font-size:0.82em;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s}
-    .report-dropdown-btn:hover{background:rgba(255,255,255,0.08);color:#fff}
+    .report-dropdown-btn{display:inline-flex;align-items:center;gap:4px;font-size:0.82em;color:var(--muted);background:transparent;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:color 0.15s}
+    .report-dropdown-btn:hover{color:#fff}
     .report-dropdown-btn svg{width:14px;height:14px}
     .report-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:150px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);backdrop-filter:blur(12px);overflow:hidden}
     .report-dropdown-menu.open{display:block}
     .report-dropdown-menu a{display:flex;align-items:center;gap:8px;padding:10px 14px;color:#efe8ff;text-decoration:none;font-size:0.85em;font-weight:500;transition:background 0.12s}
     .report-dropdown-menu a:hover{background:rgba(255,255,255,0.06)}
     .report-dropdown-menu a svg{width:14px;height:14px;opacity:0.6}
-    html.light-theme .report-dropdown-btn{background:rgba(40,20,60,0.04);border-color:rgba(100,60,140,0.12);color:rgba(40,20,60,0.6)}
-    html.light-theme .report-dropdown-btn:hover{background:rgba(40,20,60,0.08);color:rgba(40,20,60,0.88)}
+    html.light-theme .report-dropdown-btn{color:rgba(40,20,60,0.6)}
+    html.light-theme .report-dropdown-btn:hover{color:rgba(40,20,60,0.88)}
     html.light-theme .report-dropdown-menu{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12);box-shadow:0 8px 24px rgba(100,60,140,0.15)}
     html.light-theme .report-dropdown-menu a{color:#1a0a2e}
     html.light-theme .report-dropdown-menu a:hover{background:rgba(100,60,140,0.06)}
@@ -282,11 +282,11 @@
     #theme-toggle{background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;padding:6px;margin-left:12px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:color 0.2s}
     #theme-toggle:hover{color:#fff}
     #theme-toggle svg{width:20px;height:20px}
-    .lang-toggle-btn{background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);cursor:pointer;padding:4px 10px;margin-left:4px;border-radius:6px;display:flex;align-items:center;gap:4px;font-size:0.82em;font-weight:600;font-family:inherit}
-    .lang-toggle-btn:hover{color:#fff;border-color:rgba(255,255,255,0.2)}
-    .lang-toggle-btn svg{width:16px;height:16px}
-    html.light-theme .lang-toggle-btn{color:rgba(40,20,60,0.6);border-color:rgba(100,60,140,0.12)}
-    html.light-theme .lang-toggle-btn:hover{color:#1a0a2e;border-color:rgba(100,60,140,0.25)}
+    .lang-toggle-btn{background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;padding:6px 10px;margin-left:4px;border-radius:999px;display:flex;align-items:center;gap:5px;font-size:0.82em;font-weight:600;font-family:inherit;transition:color .2s}
+    .lang-toggle-btn:hover{color:#fff}
+    .lang-toggle-btn svg{width:18px;height:18px}
+    html.light-theme .lang-toggle-btn{color:rgba(40,20,60,0.6)}
+    html.light-theme .lang-toggle-btn:hover{color:#1a0a2e}
     /* Light theme overrides */
     html.light-theme{
       --bg-1:#f0edf5;
@@ -331,16 +331,16 @@
     html.light-theme .status-item div{color:rgba(40,20,60,0.6) !important}
     /* Links dropdown (same style as report dropdown) */
     .links-dropdown{position:relative;display:inline-flex}
-    .links-dropdown-btn{display:inline-flex;align-items:center;gap:4px;font-size:0.82em;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s}
-    .links-dropdown-btn:hover{background:rgba(255,255,255,0.08);color:#fff}
+    .links-dropdown-btn{display:inline-flex;align-items:center;gap:4px;font-size:0.82em;color:var(--muted);background:transparent;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:color 0.15s}
+    .links-dropdown-btn:hover{color:#fff}
     .links-dropdown-btn svg{width:14px;height:14px}
     .links-dropdown-menu{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.1);border-radius:8px;min-width:240px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4);backdrop-filter:blur(12px);overflow:hidden}
     .links-dropdown-menu.open{display:block}
     .links-dropdown-menu a{display:flex;align-items:center;gap:8px;padding:10px 14px;color:#efe8ff;text-decoration:none;font-size:0.85em;font-weight:500;transition:background 0.12s}
     .links-dropdown-menu a:hover{background:rgba(255,255,255,0.06)}
     .links-dropdown-menu a svg{width:14px;height:14px;opacity:0.6}
-    html.light-theme .links-dropdown-btn{background:rgba(40,20,60,0.04);border-color:rgba(100,60,140,0.12);color:rgba(40,20,60,0.6)}
-    html.light-theme .links-dropdown-btn:hover{background:rgba(40,20,60,0.08);color:rgba(40,20,60,0.88)}
+    html.light-theme .links-dropdown-btn{color:rgba(40,20,60,0.6)}
+    html.light-theme .links-dropdown-btn:hover{color:rgba(40,20,60,0.88)}
     html.light-theme .links-dropdown-menu{background:rgba(255,255,255,0.95);border-color:rgba(100,60,140,0.12);box-shadow:0 8px 24px rgba(100,60,140,0.15)}
     html.light-theme .links-dropdown-menu a{color:#1a0a2e}
     html.light-theme .links-dropdown-menu a:hover{background:rgba(100,60,140,0.06)}
@@ -380,7 +380,7 @@
           <div class="links-dropdown-menu" id="links-dropdown-menu"></div>
         </div>
         <a href="/tools.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="tool"></i> <span id="nav-tools-label">Tools</span></a>
-        <a href="/patchtuesday.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="calendar"></i> <span id="nav-pt-label">Patch Tuesday</span></a>
+        <a href="/patchtuesday.html" class="report-dropdown-btn" style="margin-left:4px;text-decoration:none"><i data-feather="user-check"></i> <span id="nav-pt-label">Patch Tuesday</span></a>
       </div>
     <div class="header-services" style="display:flex;gap:12px;align-items:center">
       <div class="services-label" style="font-size:0.95em;color:var(--muted);margin-right:6px" id="services-label">Services:</div>

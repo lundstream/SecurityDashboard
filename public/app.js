@@ -9,7 +9,7 @@ let currentLang = localStorage.getItem('dashLang') || 'en';
 
 const i18n = {
   en: {
-    report: 'Report', tools: 'Tools', patchTuesday: 'Patch Tuesday',
+    report: 'CVE-report', tools: 'Tools', patchTuesday: 'Patch Tuesday', links: 'Links',
     yesterday: 'Yesterday', lastWeek: 'Last Week', lastMonth: 'Last Month',
     services: 'Services:', uptime: 'Uptime for lundstream.net:',
     cvesPerDay: "CVE's per day:", vendors30: 'Most Targeted Vendors last 30 Days:',
@@ -22,7 +22,7 @@ const i18n = {
     descPending: 'Recently published \u2014 description pending'
   },
   sv: {
-    report: 'Rapport', tools: 'Verktyg', patchTuesday: 'Patch Tuesday',
+    report: 'CVE-rapport', tools: 'Verktyg', patchTuesday: 'Patch-tisdag', links: 'Länkar',
     yesterday: 'Ig\u00e5r', lastWeek: 'Senaste veckan', lastMonth: 'Senaste m\u00e5naden',
     services: 'Tj\u00e4nster:', uptime: 'Drifttid f\u00f6r lundstream.net:',
     cvesPerDay: 'CVE:er per dag:', vendors30: 'Mest drabbade leverant\u00f6rer senaste 30 dagarna:',
@@ -43,6 +43,7 @@ function applyTranslations() {
   set('nav-report-label', 'report');
   set('nav-tools-label', 'tools');
   set('nav-pt-label', 'patchTuesday');
+  set('links-dropdown-label', 'links');
   set('services-label', 'services');
   set('uptime-label', 'uptime');
   set('cve-chart-label', 'cvesPerDay');
