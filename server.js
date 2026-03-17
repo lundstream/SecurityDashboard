@@ -767,7 +767,7 @@ async function enrichVendorsFromCircl() {
   // Phase 3: backfill published column from existing data blobs (NULL or wrong year)
   const badPub = d.prepare(`SELECT id, data, published FROM cves WHERE id LIKE 'CVE-%' AND (
     published IS NULL OR
-    ABS(CAST(SUBSTR(id, 5, 4) AS INTEGER) - CAST(SUBSTR(published, 1, 4) AS INTEGER)) > 2
+    ABS(CAST(SUBSTR(id, 5, 4) AS INTEGER) - CAST(SUBSTR(published, 1, 4) AS INTEGER)) > 1
   )`).all();
   let backfilled = 0;
   for (const row of badPub) {
