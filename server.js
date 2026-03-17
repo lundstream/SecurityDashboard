@@ -773,11 +773,25 @@ async function enrichVendorsFromCircl() {
   for (const row of badPub) {
     try {
       const item = JSON.parse(row.data);
-      const pub = extractItemDate(item, row.id);
-      if (pub) {
-        d.prepare('UPDATE cves SET published = ? WHERE id = ?').run(pub.toISOString(), row.id);
-        backfilled++;
+      // Try multiple date sources — more aggressive than extractItemDate
+      const candidates = [
+        item.cveMetadata && item.cveMetadata.datePublished,
+        item.Published,
+        item.published,
+        item.document && item.document.tracking && item.document.tracking.initial_release_date,
+        item.cveMetadata && item.cveMetadata.dateReserved
+      ].filter(Boolean);
+      const cveYear = parseInt(row.id.match(/CVE-(\d{4})/)[1]);
+      let best = null;
+      for (const raw of candidates) {
+        const dt = new Date(raw);
+        if (isNaN(dt.getTime())) continue;
+        if (Math.abs(dt.getFullYear() - cveYear) <= 2) { best = dt; break; }
       }
+      // Last resort: use Jan 1 of the CVE-ID year
+      if (!best) best = new Date(`${cveYear}-01-01T00:00:00Z`);
+      d.prepare('UPDATE cves SET published = ? WHERE id = ?').run(best.toISOString(), row.id);
+      backfilled++;
     } catch (e) {}
   }
   console.log(`Published backfill: ${badPub.length} CVEs with NULL/wrong published, ${backfilled} fixed`);
