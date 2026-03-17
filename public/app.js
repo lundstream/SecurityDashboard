@@ -24,7 +24,7 @@ const i18n = {
     riskNav: "Top-priority CVE's",
     riskHeading: "Top-priority CVE's", riskVendor: 'Vendor:', riskPeriod: 'Period:',
     riskLoadMore: 'Load more', riskFormulaTitle: 'How risk score is calculated',
-    riskFormulaDesc: 'A CVE that is actively exploited (KEV), has a public exploit, no available patch, and was published recently will score highest, regardless of its CVSS severity rating alone.',
+    riskFormulaDesc: 'A CVE that is actively exploited (KEV), has a public exploit, no available patch, was published recently, and has a high EPSS probability will score highest, regardless of its CVSS severity rating alone.',
     riskScaleTitle: 'Score scale', riskVendorChart: 'Highest Risk Vendors',
     risk30: '30 days', risk90: '90 days', risk365: '1 year'
   },
@@ -33,7 +33,7 @@ const i18n = {
     tabNews: 'Nyheter', tabRisk: 'Prioriterade CVE:er', tabCves: 'Senaste CVE:er', tabPT: 'Patch-tisdag', tabNS: 'Omvärldsanalys', tabTools: 'Verktyg',
     yesterday: 'Ig\u00e5r', lastWeek: 'Senaste veckan', lastMonth: 'Senaste m\u00e5naden',
     services: 'Tj\u00e4nster:', uptime: 'Drifttid f\u00f6r lundstream.net:',
-    cvesPerDay: 'CVE:er per dag:', vendors30: 'Mest drabbade leverant\u00f6rer senaste 30 dagarna:',
+    cvesPerDay: 'CVE:er per dag:', vendors30: 'Mest drabbade lev, senaste 30 dagarna:',
     latestCves: 'Senaste CVE:er', news: 'Nyheter',
     filter: 'Filter:', source: 'K\u00e4lla:',
     searchCves: 'S\u00f6k CVE:er...', searchNews: 'S\u00f6k nyheter...',
@@ -44,7 +44,7 @@ const i18n = {
     riskNav: 'Prioriterade CVE:er',
     riskHeading: 'Prioriterade CVE:er', riskVendor: 'Leverant\u00f6r:', riskPeriod: 'Period:',
     riskLoadMore: 'Ladda fler', riskFormulaTitle: 'Hur riskpo\u00e4ng ber\u00e4knas',
-    riskFormulaDesc: 'En CVE som aktivt utnyttjas (KEV), har offentlig exploit, saknar patch och \u00e4r nyligen publicerad f\u00e5r h\u00f6gst po\u00e4ng, oavsett CVSS-niv\u00e5.',
+    riskFormulaDesc: 'En CVE som aktivt utnyttjas (KEV), har offentlig exploit, saknar patch, \u00e4r nyligen publicerad och har h\u00f6g EPSS-sannolikhet f\u00e5r h\u00f6gst po\u00e4ng, oavsett CVSS-niv\u00e5.',
     riskScaleTitle: 'Po\u00e4ngskala', riskVendorChart: 'H\u00f6gst risk per leverant\u00f6r',
     risk30: '30 dagar', risk90: '90 dagar', risk365: '1 \u00e5r'
   }
@@ -450,16 +450,18 @@ function renderCveItems(items) {
     // append zero-day tag after the title
     const zeroHtml = zeroTag ? (' ' + zeroTag) : '';
     // Enrichment badges
-    const discovered = it._discovered ? fmtDate(it._discovered) : '';
+    const updated = it._discovered ? fmtDate(it._discovered) : '';
     const kevBadge = it._kev ? '<span class="badge badge-kev">KEV</span>' : '';
     const exploitBadge = it._exploit ? '<span class="badge badge-exploit">Exploit</span>' : '<span class="badge badge-no">No exploit</span>';
     const patchBadge = it._patch ? '<span class="badge badge-patch">Patch</span>' : '<span class="badge badge-nopatch">No patch</span>';
-    const discoveredLine = discovered ? `Discovered: ${discovered} • ` : '';
+    const epssBadge = it._epss != null ? `<span class="badge" style="background:rgba(0,180,255,0.18);color:#44bbff;font-weight:600">EPSS: ${(it._epss * 100).toFixed(1)}%</span>` : '';
+    const vendorBadge = it._vendor ? `<span class="badge" style="background:rgba(160,100,255,0.15);color:#b07aff;font-weight:600">${escapeHtml(it._vendor)}</span>` : '';
+    const updatedLine = updated ? ` • Updated: ${updated}` : '';
     return `
       <div class="card">
         <div>${headHtml}${zeroHtml}</div>
-        <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • ${discoveredLine}Published: ${published}</div>
-        <div class="cve-badges">${exploitBadge} ${patchBadge} ${kevBadge}</div>
+        <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • Published: ${published}${updatedLine}</div>
+        <div class="cve-badges">${vendorBadge} ${exploitBadge} ${patchBadge} ${kevBadge} ${epssBadge}</div>
         <div class="desc">${truncated ? `<span class="desc-short">${escapeHtml(summary)}</span><span class="desc-full" hidden>${escapeHtml(fullSummary)}</span> <a href="#" class="show-more">${t('showMore')}</a>` : escapeHtml(summary)}</div>
       </div>
     `;

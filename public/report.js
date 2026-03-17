@@ -30,7 +30,7 @@ function renderCveCard(cve) {
   }
   const vendor = cve.vendor ? escapeHtml(cve.vendor) : '';
   const published = fmtDate(cve.published);
-  const discovered = cve.discovered ? fmtDate(cve.discovered) : '';
+  const updated = cve.updated || cve.discovered ? fmtDate(cve.updated || cve.discovered) : '';
   const summary = escapeHtml(cve.summary || 'No description available');
   const isTruncated = summary.length > 250;
   const truncated = isTruncated ? summary.slice(0, 250).replace(/\s+\S*$/, '') + '\u2026' : summary;
@@ -38,15 +38,17 @@ function renderCveCard(cve) {
   const kevBadge = cve.kev ? '<span class="badge badge-kev">KEV</span>' : '';
   const exploitBadge = cve.exploit ? '<span class="badge badge-exploit">Exploit</span>' : '<span class="badge badge-no">No exploit</span>';
   const patchBadge = cve.patch ? '<span class="badge badge-patch">Patch</span>' : '<span class="badge badge-nopatch">No patch</span>';
+  const epssBadge = cve.epss != null ? `<span class="badge" style="background:rgba(0,180,255,0.18);color:#44bbff;font-weight:600">EPSS: ${(cve.epss * 100).toFixed(1)}%</span>` : '';
+  const vendorBadge = vendor ? `<span class="badge" style="background:rgba(160,100,255,0.15);color:#b07aff;font-weight:600">${vendor}</span>` : '';
 
   const url = id.startsWith('CVE-') ? `https://cve.mitre.org/cgi-bin/cvename.cgi?name=${encodeURIComponent(id)}` : '#';
   const vendorHtml = vendor ? ` • Vendor: ${vendor}` : '';
-  const discoveredHtml = discovered ? `Discovered: ${discovered} • ` : '';
+  const updatedHtml = updated ? ` • Updated: ${updated}` : '';
 
   return `<div class="card">
     <div><a href="${url}" target="_blank" rel="noopener">${id}</a>${vendorHtml}</div>
-    <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • ${discoveredHtml}Published: ${published}</div>
-    <div class="cve-badges">${exploitBadge} ${patchBadge} ${kevBadge}</div>
+    <div class="meta"><span style="${cvssStyle}">CVSS: ${cvss}</span> • Published: ${published}${updatedHtml}</div>
+    <div class="cve-badges">${vendorBadge} ${exploitBadge} ${patchBadge} ${kevBadge} ${epssBadge}</div>
     <div class="desc">${isTruncated ? `<span class="desc-short">${truncated}</span><span class="desc-full" hidden>${summary}</span> <a href="#" class="show-more">show more</a>` : truncated}</div>
   </div>`;
 }

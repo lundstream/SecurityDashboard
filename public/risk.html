@@ -203,23 +203,25 @@
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">
               <span style="background:rgba(132,0,255,0.15);color:#b580ff;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">CVSS &times; 10</span>
               <span style="color:var(--muted)">+</span>
-              <span style="background:rgba(255,56,96,0.15);color:#ff5c7c;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">KEV +30</span>
+              <span style="background:rgba(255,56,96,0.15);color:#ff5c7c;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">KEV +40</span>
               <span style="color:var(--muted)">+</span>
-              <span style="background:rgba(255,170,0,0.15);color:#ffaa00;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">Exploit +20</span>
+              <span style="background:rgba(255,170,0,0.15);color:#ffaa00;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">Exploit +25</span>
               <span style="color:var(--muted)">+</span>
-              <span style="background:rgba(255,100,50,0.15);color:#ff8844;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">No Patch +15</span>
+              <span style="background:rgba(255,100,50,0.15);color:#ff8844;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">No Patch +20</span>
               <span style="color:var(--muted)">+</span>
-              <span style="background:rgba(0,180,255,0.15);color:#44bbff;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">Recency 0&ndash;15</span>
+              <span style="background:rgba(0,200,100,0.15);color:#44cc66;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">Recency 0&ndash;20</span>
+              <span style="color:var(--muted)">+</span>
+              <span style="background:rgba(0,210,255,0.15);color:#00ccff;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.92em">EPSS &times; 100</span>
             </div>
-            <div style="color:var(--muted);font-size:0.92em" id="risk-formula-desc">A CVE that is actively exploited (KEV), has a public exploit, no available patch, and was published recently will score highest, regardless of its CVSS severity rating alone.</div>
+            <div style="color:var(--muted);font-size:0.92em" id="risk-formula-desc">A CVE that is actively exploited (KEV), has a public exploit, no available patch, was published recently, and has a high EPSS probability will score highest, regardless of its CVSS severity rating alone.</div>
           </div>
           <div style="min-width:140px;text-align:center">
             <div style="font-weight:600;margin-bottom:4px;font-size:0.92em" id="risk-scale-title">Score scale</div>
             <div style="display:flex;flex-direction:column;gap:3px;font-size:0.85em">
-              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ff2244;display:inline-block"></span><span>120+ Critical</span></div>
-              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ff6622;display:inline-block"></span><span>100&ndash;119 High</span></div>
-              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ffaa00;display:inline-block"></span><span>80&ndash;99 Medium</span></div>
-              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#44bb44;display:inline-block"></span><span>&lt;80 Lower</span></div>
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ff2244;display:inline-block"></span><span>200+ Critical</span></div>
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ff6622;display:inline-block"></span><span>150&ndash;199 High</span></div>
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#ffaa00;display:inline-block"></span><span>100&ndash;149 Medium</span></div>
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#44bb44;display:inline-block"></span><span>&lt;100 Lower</span></div>
             </div>
           </div>
         </div>

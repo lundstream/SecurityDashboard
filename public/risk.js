@@ -16,9 +16,9 @@ const i18n = {
     riskVendor: 'Filter by vendor:', riskPeriod: 'Period:',
     riskLoadMore: 'Load more',
     riskFormulaTitle: 'How risk score is calculated',
-    riskFormulaDesc: 'A CVE that is actively exploited (KEV), has a public exploit, no available patch, and was published recently will score highest, regardless of its CVSS severity rating alone.',
+    riskFormulaDesc: 'A CVE that is actively exploited (KEV), has a public exploit, no available patch, was published recently, and has a high EPSS probability will score highest, regardless of its CVSS severity rating alone.',
     riskScaleTitle: 'Score scale',
-    riskVendorChart: 'Critical Risk CVEs per Vendor (120+)',
+    riskVendorChart: 'Highest Risk Vendors',
     risk30: '30 days', risk60: '60 days', risk180: '180 days',
     showMore: 'show more', showLess: 'show less',
     descPending: 'Recently published \u2014 description pending'
@@ -28,9 +28,9 @@ const i18n = {
     riskVendor: 'Filtrera p\u00e5 leverant\u00f6r:', riskPeriod: 'Period:',
     riskLoadMore: 'Ladda fler',
     riskFormulaTitle: 'Hur riskpo\u00e4ng ber\u00e4knas',
-    riskFormulaDesc: 'En CVE som aktivt utnyttjas (KEV), har offentlig exploit, saknar patch och \u00e4r nyligen publicerad f\u00e5r h\u00f6gst po\u00e4ng, oavsett CVSS-niv\u00e5.',
+    riskFormulaDesc: 'En CVE som aktivt utnyttjas (KEV), har offentlig exploit, saknar patch, \u00e4r nyligen publicerad och har h\u00f6g EPSS-sannolikhet f\u00e5r h\u00f6gst po\u00e4ng, oavsett CVSS-niv\u00e5.',
     riskScaleTitle: 'Po\u00e4ngskala',
-    riskVendorChart: 'Kritiska CVE:er per leverant\u00f6r (120+)',
+    riskVendorChart: 'Leverant\u00f6rer med h\u00f6gst risk',
     risk30: '30 dagar', risk60: '60 dagar', risk180: '180 dagar',
     showMore: 'visa mer', showLess: 'visa mindre',
     descPending: 'Nyligen publicerad \u2014 beskrivning inv\u00e4ntas'
@@ -52,9 +52,9 @@ function fmtDate(dt) {
 
 // --- Risk score helpers ---
 function riskScoreColor(score) {
-  if (score >= 120) return '#ff2244';
-  if (score >= 100) return '#ff6622';
-  if (score >= 80) return '#ffaa00';
+  if (score >= 200) return '#ff2244';
+  if (score >= 150) return '#ff6622';
+  if (score >= 100) return '#ffaa00';
   return '#44bb44';
 }
 
@@ -76,8 +76,8 @@ function renderRiskItems(items) {
     var url = id.startsWith('CVE-') ? 'https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + encodeURIComponent(id) : '#';
     var title = escapeHtml(it.title || '');
     var published = it.published ? fmtDate(it.published) : 'N/A';
-    var discovered = it._discovered ? fmtDate(it._discovered) : '';
-    var discoveredLine = discovered ? 'Discovered: ' + discovered + ' \u2022 ' : '';
+    var updated = it._discovered ? fmtDate(it._discovered) : '';
+    var updatedLine = updated ? ' \u2022 Updated: ' + updated : '';
 
     // Build head HTML: ID: Title (same as Latest CVE's)
     var headHtml = '';
@@ -91,6 +91,8 @@ function renderRiskItems(items) {
     var kevBadge = it._kev ? '<span class="badge badge-kev">KEV</span>' : '';
     var exploitBadge = it._exploit ? '<span class="badge badge-exploit">Exploit</span>' : '<span class="badge badge-no">No exploit</span>';
     var patchBadge = it._patch ? '<span class="badge badge-patch">Patch</span>' : '<span class="badge badge-nopatch">No patch</span>';
+    var epssBadge = it._epss != null ? '<span class="badge" style="background:rgba(0,180,255,0.18);color:#44bbff;font-weight:600">EPSS: ' + (it._epss * 100).toFixed(1) + '%</span>' : '';
+    var vendorBadge = it._vendor ? '<span class="badge" style="background:rgba(160,100,255,0.15);color:#b07aff;font-weight:600">' + escapeHtml(it._vendor) + '</span>' : '';
     var riskBadge = '<span class="badge" style="background:' + color + ';color:#fff;font-weight:700">Risk rating: ' + score + '</span>';
 
     // Summary with truncation (300 chars like Latest CVE's)
@@ -106,8 +108,8 @@ function renderRiskItems(items) {
 
     return '<div class="card">' +
       '<div>' + headHtml + '</div>' +
-      '<div class="meta"><span style="' + cvssStyle + '">CVSS: ' + cvss + '</span> \u2022 ' + discoveredLine + 'Published: ' + published + '</div>' +
-      '<div class="cve-badges">' + exploitBadge + ' ' + patchBadge + ' ' + kevBadge + ' ' + riskBadge + '</div>' +
+      '<div class="meta"><span style="' + cvssStyle + '">CVSS: ' + cvss + '</span> \u2022 Published: ' + published + updatedLine + '</div>' +
+      '<div class="cve-badges">' + vendorBadge + ' ' + exploitBadge + ' ' + patchBadge + ' ' + kevBadge + ' ' + epssBadge + ' ' + riskBadge + '</div>' +
       '<div class="desc">' + (truncated ? '<span class="desc-short">' + summary + '</span><span class="desc-full" hidden>' + fullSummary + '</span> <a href="#" class="show-more">' + t('showMore') + '</a>' : summary) + '</div>' +
     '</div>';
   }).join('');
@@ -167,9 +169,9 @@ async function loadVendorChart() {
     if (!canvas || !Array.isArray(data) || data.length === 0) return;
     var labels = data.map(function(v){ return v.vendor || 'Unknown'; });
     var criticals = data.map(function(v){ return v.critical_count || 0; });
+    var highs = data.map(function(v){ return (v.high_count || 0) - (v.critical_count || 0); });
     var totals = data.map(function(v){ return v.total || 0; });
     var kevCounts = data.map(function(v){ return v.kev_count || 0; });
-    var barColors = labels.map(function(_, i){ return CHART_COLORS[i % CHART_COLORS.length]; });
     var isLight = document.documentElement.classList.contains('light-theme');
     var tickColor = isLight ? 'rgba(40,20,60,0.6)' : 'rgba(255,255,255,0.6)';
     var gridColor = isLight ? 'rgba(100,60,140,0.08)' : 'rgba(255,255,255,0.04)';
@@ -180,9 +182,15 @@ async function loadVendorChart() {
       data: {
         labels: labels,
         datasets: [{
-          label: 'Critical CVEs (120+)',
+          label: 'Critical (200+)',
           data: criticals,
-          backgroundColor: barColors,
+          backgroundColor: '#ff2244',
+          borderRadius: 4,
+          barPercentage: 0.7
+        }, {
+          label: 'High (150+)',
+          data: highs,
+          backgroundColor: '#ff6622',
           borderRadius: 4,
           barPercentage: 0.7
         }]
@@ -190,20 +198,20 @@ async function loadVendorChart() {
       options: {
         indexAxis: 'y',
         maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, beginAtZero: true, ticks: { color: tickColor, font: { size: 10 }, stepSize: 1 }, grid: { color: gridColor } },
+          y: { stacked: true, ticks: { color: tickColor, font: { size: 11 } }, grid: { display: false } }
+        },
         plugins: {
-          legend: { display: false },
+          legend: { display: true, labels: { color: tickColor, boxWidth: 12, font: { size: 10 } } },
           tooltip: {
             callbacks: {
               label: function(ctx) {
                 var i = ctx.dataIndex;
-                return ' Critical: ' + criticals[i] + ' | Total CVEs: ' + totals[i] + ' | KEV: ' + kevCounts[i];
+                return ' Critical: ' + criticals[i] + ' | High: ' + (highs[i] + criticals[i]) + ' | Total: ' + totals[i] + ' | KEV: ' + kevCounts[i];
               }
             }
           }
-        },
-        scales: {
-          x: { beginAtZero: true, ticks: { color: tickColor, font: { size: 10 }, stepSize: 1 }, grid: { color: gridColor } },
-          y: { ticks: { color: tickColor, font: { size: 11 } }, grid: { display: false } }
         }
       }
     });

@@ -67,6 +67,8 @@ function initTables() {
   try { d.exec(`ALTER TABLE ai_analysis ADD COLUMN language TEXT NOT NULL DEFAULT 'en'`); } catch (e) {}
   // Migration: add description column to news if missing
   try { d.exec(`ALTER TABLE news ADD COLUMN description TEXT DEFAULT ''`); } catch (e) {}
+  // Migration: add EPSS score column to cves if missing
+  try { d.exec(`ALTER TABLE cves ADD COLUMN epss_score REAL`); } catch (e) {}
 
   // KEV (Known Exploited Vulnerabilities) cache
   d.exec(`
@@ -187,8 +189,9 @@ function slimCve(row) {
     _kev: row.kev || 0,
     _exploit: row.has_exploit || 0,
     _patch: row.has_patch || 0,
-    _vendor: row.vendor || '',
-    _discovered: row.discovered || ''
+    _vendor: row.vendor ? row.vendor.charAt(0).toUpperCase() + row.vendor.slice(1) : '',
+    _discovered: row.discovered || '',
+    _epss: row.epss_score != null ? row.epss_score : null
   };
 }
 
@@ -233,7 +236,7 @@ function upsertCve(id, data, published, cvssScore, enrichment) {
   const stmt = d.prepare(`
     INSERT INTO cves (id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET data=excluded.data, published=excluded.published, cvss_score=excluded.cvss_score,
+    ON CONFLICT(id) DO UPDATE SET data=excluded.data, published=COALESCE(excluded.published, cves.published), cvss_score=excluded.cvss_score,
       kev=COALESCE(excluded.kev, cves.kev), has_exploit=COALESCE(excluded.has_exploit, cves.has_exploit),
       has_patch=COALESCE(excluded.has_patch, cves.has_patch), vendor=excluded.vendor,
       discovered=COALESCE(excluded.discovered, cves.discovered)
@@ -248,13 +251,13 @@ function upsertCve(id, data, published, cvssScore, enrichment) {
 
 function getCves(count, offset) {
   const d = getDb();
-  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered FROM cves ORDER BY published DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(count, offset).map(slimCve);
+  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered, epss_score FROM cves ORDER BY published DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(count, offset).map(slimCve);
 }
 
 function getCvesFiltered(count, offset, cvssMin) {
   const d = getDb();
   if (!cvssMin || isNaN(cvssMin)) return getCves(count, offset);
-  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered FROM cves WHERE cvss_score IS NOT NULL AND cvss_score >= ? ORDER BY published DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(cvssMin, count, offset).map(slimCve);
+  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered, epss_score FROM cves WHERE cvss_score IS NOT NULL AND cvss_score >= ? ORDER BY published DESC, fetched_at DESC LIMIT ? OFFSET ?`).all(cvssMin, count, offset).map(slimCve);
 }
 
 function getCveCount() {
@@ -372,6 +375,7 @@ function updateCveEnrichment(cveId, fields) {
   if (fields.has_patch != null) { sets.push('has_patch=?'); vals.push(fields.has_patch ? 1 : 0); }
   if (fields.vendor != null) { sets.push('vendor=?'); vals.push(fields.vendor); }
   if (fields.discovered != null) { sets.push('discovered=?'); vals.push(fields.discovered); }
+  if (fields.epss_score != null) { sets.push('epss_score=?'); vals.push(fields.epss_score); }
   if (sets.length === 0) return;
   vals.push(cveId);
   d.prepare(`UPDATE cves SET ${sets.join(',')} WHERE id=?`).run(...vals);
@@ -400,7 +404,7 @@ function getReportCves(options) {
   // For KEV queries, filter by kev.date_added instead of cves.published
   if (options.kevOnly) {
     let sql = `SELECT k.cve_id, k.vendor AS kev_vendor, k.product AS kev_product, k.description AS kev_description, k.date_added,
-      c.data, c.cvss_score, c.kev, c.has_exploit, c.has_patch, c.vendor, c.discovered, c.published
+      c.data, c.cvss_score, c.kev, c.has_exploit, c.has_patch, c.vendor, c.discovered, c.published, c.epss_score
       FROM kev k LEFT JOIN cves c ON k.cve_id = c.id WHERE k.date_added >= ?`;
     const params = [cutoffDate];
     if (options.vendor) {
@@ -420,17 +424,19 @@ function getReportCves(options) {
           _kev: 1, _exploit: 1, _patch: 0,
           _vendor: r.kev_vendor || '',
           _discovered: '', _cvss: null,
-          _published: r.date_added || null
+          _published: r.date_added || null,
+          _epss: r.epss_score != null ? r.epss_score : null
         };
       }
       const obj = JSON.parse(r.data);
       obj._kev = r.kev || 0; obj._exploit = r.has_exploit || 0; obj._patch = r.has_patch || 0;
       obj._vendor = r.vendor || r.kev_vendor || ''; obj._discovered = r.discovered || ''; obj._cvss = r.cvss_score;
+      obj._epss = r.epss_score != null ? r.epss_score : null;
       return obj;
     });
   }
 
-  let sql = `SELECT data, cvss_score, kev, has_exploit, has_patch, vendor, discovered, published FROM cves WHERE published >= ?`;
+  let sql = `SELECT data, cvss_score, kev, has_exploit, has_patch, vendor, discovered, published, epss_score FROM cves WHERE published >= ?`;
   const params = [cutoff];
   if (options.minCvss != null) { sql += ` AND cvss_score IS NOT NULL AND cvss_score >= ?`; params.push(options.minCvss); }
   if (options.maxCvss != null) { sql += ` AND (cvss_score IS NULL OR cvss_score < ?)`; params.push(options.maxCvss); }
@@ -447,6 +453,7 @@ function getReportCves(options) {
     const obj = JSON.parse(r.data);
     obj._kev = r.kev || 0; obj._exploit = r.has_exploit || 0; obj._patch = r.has_patch || 0;
     obj._vendor = r.vendor || ''; obj._discovered = r.discovered || ''; obj._cvss = r.cvss_score;
+    obj._epss = r.epss_score != null ? r.epss_score : null;
     return obj;
   });
 }
@@ -522,7 +529,7 @@ function getRecentNews(days) {
 function searchCves(query, limit) {
   const d = getDb();
   const like = '%' + query + '%';
-  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered FROM cves WHERE id LIKE ? OR vendor LIKE ? ORDER BY published DESC LIMIT ?`).all(like, like, limit).map(slimCve);
+  return d.prepare(`SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered, epss_score FROM cves WHERE id LIKE ? OR vendor LIKE ? ORDER BY published DESC LIMIT ?`).all(like, like, limit).map(slimCve);
 }
 
 function searchNews(query, limit) {
@@ -625,17 +632,18 @@ function getHighRiskCves(count, offset, maxAgeDays, vendor) {
     where += ` AND lower(vendor) IN (${vendors.map(() => '?').join(',')})`;
     params.push(...vendors.map(v => v.toLowerCase()));
   }
-  // Risk score: CVSS*10 + KEV*30 + exploit*20 + no-patch*15 + recency(0-15)
-  const sql = `SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered,
+  // Risk score: CVSS*10 + KEV*40 + exploit*25 + no-patch*20 + recency(0-20) + EPSS*100
+  const sql = `SELECT id, data, published, cvss_score, kev, has_exploit, has_patch, vendor, discovered, epss_score,
     CAST(
       (cvss_score * 10)
-      + (CASE WHEN kev = 1 THEN 30 ELSE 0 END)
-      + (CASE WHEN has_exploit = 1 THEN 20 ELSE 0 END)
-      + (CASE WHEN has_patch = 0 THEN 15 ELSE 0 END)
-      + (CASE WHEN julianday('now') - julianday(published) <= 7 THEN 15
-              WHEN julianday('now') - julianday(published) <= 30 THEN 10
-              WHEN julianday('now') - julianday(published) <= 90 THEN 5
+      + (CASE WHEN kev = 1 THEN 40 ELSE 0 END)
+      + (CASE WHEN has_exploit = 1 THEN 25 ELSE 0 END)
+      + (CASE WHEN has_patch = 0 THEN 20 ELSE 0 END)
+      + (CASE WHEN julianday('now') - julianday(published) <= 7 THEN 20
+              WHEN julianday('now') - julianday(published) <= 30 THEN 14
+              WHEN julianday('now') - julianday(published) <= 90 THEN 7
               ELSE 0 END)
+      + (COALESCE(epss_score, 0) * 100)
     AS REAL) as risk_score
     FROM cves ${where}
     ORDER BY risk_score DESC, cvss_score DESC, published DESC
@@ -661,21 +669,28 @@ function getRiskVendorStats(maxAgeDays, vendors) {
   return d.prepare(`SELECT UPPER(SUBSTR(MAX(vendor),1,1)) || SUBSTR(MAX(vendor),2) as vendor,
     COUNT(*) as total,
     SUM(CASE WHEN (cvss_score * 10
-      + (CASE WHEN kev = 1 THEN 30 ELSE 0 END)
-      + (CASE WHEN has_exploit = 1 THEN 20 ELSE 0 END)
-      + (CASE WHEN has_patch = 0 THEN 15 ELSE 0 END)) >= 120 THEN 1 ELSE 0 END) as critical_count,
+      + (CASE WHEN kev = 1 THEN 40 ELSE 0 END)
+      + (CASE WHEN has_exploit = 1 THEN 25 ELSE 0 END)
+      + (CASE WHEN has_patch = 0 THEN 20 ELSE 0 END)
+      + (COALESCE(epss_score, 0) * 100)) >= 200 THEN 1 ELSE 0 END) as critical_count,
+    SUM(CASE WHEN (cvss_score * 10
+      + (CASE WHEN kev = 1 THEN 40 ELSE 0 END)
+      + (CASE WHEN has_exploit = 1 THEN 25 ELSE 0 END)
+      + (CASE WHEN has_patch = 0 THEN 20 ELSE 0 END)
+      + (COALESCE(epss_score, 0) * 100)) >= 150 THEN 1 ELSE 0 END) as high_count,
     ROUND(AVG(
       (cvss_score * 10)
-      + (CASE WHEN kev = 1 THEN 30 ELSE 0 END)
-      + (CASE WHEN has_exploit = 1 THEN 20 ELSE 0 END)
-      + (CASE WHEN has_patch = 0 THEN 15 ELSE 0 END)
+      + (CASE WHEN kev = 1 THEN 40 ELSE 0 END)
+      + (CASE WHEN has_exploit = 1 THEN 25 ELSE 0 END)
+      + (CASE WHEN has_patch = 0 THEN 20 ELSE 0 END)
+      + (COALESCE(epss_score, 0) * 100)
     ), 1) as avg_risk,
     SUM(CASE WHEN kev = 1 THEN 1 ELSE 0 END) as kev_count,
     SUM(CASE WHEN has_exploit = 1 THEN 1 ELSE 0 END) as exploit_count
     FROM cves ${where}
     GROUP BY vendor COLLATE NOCASE
-    HAVING critical_count > 0
-    ORDER BY critical_count DESC, avg_risk DESC
+    HAVING high_count > 0
+    ORDER BY critical_count DESC, high_count DESC, avg_risk DESC
     LIMIT 10`).all(...params);
 }
 

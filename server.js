@@ -137,14 +137,21 @@ async function probeUrl(url, timeout = 5000) {
 // =========================================================================
 //  CVE POLLING (every 10 minutes, stored in SQLite, keep 60 days)
 // =========================================================================
-function extractItemDate(it) {
-  const raw = it.Published || it.published
-    || (it.cveMetadata && (it.cveMetadata.datePublished || it.cveMetadata.dateUpdated))
+function extractItemDate(it, cveId) {
+  // Prefer authoritative CVE metadata dates over feed-level timestamps
+  const raw = (it.cveMetadata && (it.cveMetadata.datePublished || it.cveMetadata.dateUpdated))
+    || it.Published || it.published
     || (it.document && it.document.tracking && (it.document.tracking.current_release_date || it.document.tracking.initial_release_date))
     || null;
   if (!raw) return null;
   const d = new Date(raw);
-  return isNaN(d.getTime()) ? null : d;
+  if (isNaN(d.getTime())) return null;
+  // If date year is >2 years from the CVE-ID year, it's likely a feed timestamp — discard
+  if (cveId) {
+    const m = cveId.match(/CVE-(\d{4})/i);
+    if (m && Math.abs(d.getFullYear() - parseInt(m[1])) > 2) return null;
+  }
+  return d;
 }
 
 function extractItemId(it) {
@@ -273,7 +280,7 @@ async function pollCves() {
     for (const it of data) {
       const id = extractItemId(it);
       if (!id) continue;
-      const d = extractItemDate(it);
+      const d = extractItemDate(it, id);
       const published = d ? d.toISOString() : null;
       const enrichment = enrichCveItem(id, it);
       // upsert — SQLite handles dedup by primary key
@@ -513,6 +520,47 @@ async function pollKev() {
 }
 
 // =========================================================================
+//  EPSS (Exploit Prediction Scoring System) from FIRST.org
+// =========================================================================
+async function pollEpss() {
+  try {
+    // Get CVE IDs that are missing EPSS scores (or haven't been updated recently)
+    const d = db.getDb();
+    const rows = d.prepare(`SELECT id FROM cves WHERE epss_score IS NULL AND published IS NOT NULL ORDER BY published DESC LIMIT 1000`).all();
+    if (!rows.length) { console.log('EPSS: all CVEs already have scores'); return; }
+    const ids = rows.map(r => r.id);
+    let updated = 0;
+    // FIRST.org API accepts up to ~100 CVEs per request
+    const BATCH = 100;
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batch = ids.slice(i, i + BATCH);
+      const url = 'https://api.first.org/data/v1/epss?cve=' + batch.join(',');
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) { console.error('EPSS API error:', resp.status); continue; }
+        const json = await resp.json();
+        if (json.data && Array.isArray(json.data)) {
+          for (const entry of json.data) {
+            const score = parseFloat(entry.epss);
+            if (!isNaN(score) && entry.cve) {
+              db.updateCveEnrichment(entry.cve, { epss_score: score });
+              updated++;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('EPSS batch error:', e && e.message);
+      }
+      // Rate-limit: small delay between batches
+      if (i + BATCH < ids.length) await new Promise(r => setTimeout(r, 1000));
+    }
+    console.log(`EPSS: updated ${updated} of ${ids.length} CVEs`);
+  } catch (e) {
+    console.error('EPSS poll error:', e && e.message);
+  }
+}
+
+// =========================================================================
 //  CVE ENRICHMENT (extract vendor, discovered, exploit/patch from data)
 // =========================================================================
 // Vendor blocklist (module-scoped, created once)
@@ -524,12 +572,12 @@ const VENDOR_BLOCKLIST = new Set([
   'secalert','secalert_us','responsibledisclosure','vulnreport','reachout',
   'contact','info','support','nvd','nist','zdi-disclosures','cvd','n/a',
   'openclaw','open-emr','oretnom23','fabian','iletisim','gfi','nsasoft',
-  'vulncheck','patchstack','wordfence','hackerone','rapid7','snyk','tenable',
-  'trendmicro','qualys','checkmarx','sonatype','portswigger','acunetix',
-  'beyondtrust','securin','appcheck','vdiscover','idefense','flexera',
+  'vulncheck','patchstack','wordfence','hackerone','snyk',
+  'checkmarx','sonatype','portswigger','acunetix',
+  'securin','appcheck','vdiscover','idefense','flexera',
   'veracode','mend','whitesource','incibe','jpcert','kcirt','krcert',
   'mitre','github',
-  'the','this','that','shared','progress','with','from','for','and',
+  'the','this','that','shared','with','from','for','and',
   'not','was','has','had','are','were','been','being','have','does',
   'its','all','any','each','every','some','other','another','such',
   'cross-site','improper','missing','multiple','remote','local','use',
@@ -540,15 +588,12 @@ const VENDOR_BLOCKLIST = new Set([
 function enrichCveItem(id, item) {
   const enrichment = {};
 
-  // Discovered date (dateReserved = when CVE ID was assigned, or lastModified as fallback)
+  // Updated date: prefer CVE 5.x dateUpdated, fall back to NVD lastModified
   try {
-    const reserved = item.cveMetadata && item.cveMetadata.dateReserved;
-    if (reserved) {
-      const d = new Date(reserved);
-      if (!isNaN(d.getTime())) enrichment.discovered = d.toISOString();
-    }
-    if (!enrichment.discovered && item.lastModified) {
-      const d = new Date(item.lastModified);
+    const dateUpdated = item.cveMetadata && item.cveMetadata.dateUpdated;
+    const raw = dateUpdated || item.lastModified || null;
+    if (raw) {
+      const d = new Date(raw);
       if (!isNaN(d.getTime())) enrichment.discovered = d.toISOString();
     }
   } catch (e) {}
@@ -670,14 +715,19 @@ function enrichExistingCves() {
   console.log(`Enriched ${enriched}/${rows.length} CVEs with metadata`);
 }
 
-// Fetch vendor/product from CIRCL CVE 5.0 API for CVEs missing vendor data.
-// NVD v2 responses often lack the affected[] array, but CIRCL has it.
+// Fetch vendor/product from CIRCL CVE 5.0 API for CVEs missing vendor data,
+// and refresh NVD-format data blobs with richer CIRCL data (for dateUpdated etc.)
 async function enrichVendorsFromCircl() {
   const d = db.getDb();
-  const rows = d.prepare("SELECT id FROM cves WHERE (vendor IS NULL OR vendor = '') AND id LIKE 'CVE-%' ORDER BY published DESC LIMIT 2000").all();
-  if (rows.length === 0) { console.log('CIRCL vendor enrichment: all CVEs have vendors'); return; }
-  console.log(`CIRCL vendor enrichment: ${rows.length} CVEs missing vendor, fetching from CIRCL...`);
-  let filled = 0;
+  // Phase 1: CVEs missing vendor
+  const missingVendor = d.prepare("SELECT id FROM cves WHERE (vendor IS NULL OR vendor = '') AND id LIKE 'CVE-%' ORDER BY published DESC LIMIT 2000").all();
+  // Phase 2: CVEs with stale NVD-only data (no cveMetadata.dateUpdated) — refresh from CIRCL
+  const staleData = d.prepare("SELECT id FROM cves WHERE id LIKE 'CVE-%' AND data NOT LIKE '%cveMetadata%' ORDER BY published DESC LIMIT 3000").all();
+  const seen = new Set(missingVendor.map(r => r.id));
+  const rows = [...missingVendor, ...staleData.filter(r => !seen.has(r.id))];
+  if (rows.length === 0) { console.log('CIRCL vendor enrichment: all CVEs up to date'); return; }
+  console.log(`CIRCL vendor enrichment: ${missingVendor.length} CVEs missing vendor, ${staleData.filter(r => !seen.has(r.id)).length} stale data blobs, fetching from CIRCL...`);
+  let filled = 0, refreshed = 0;
   const BATCH_SIZE = 10;
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
@@ -690,20 +740,27 @@ async function enrichVendorsFromCircl() {
         if (!r.ok) return null;
         const data = await r.json();
         const e = enrichCveItem(row.id, data);
+        const hadVendor = !seen.has(row.id); // was in staleData, not missingVendor
         if (e.vendor) {
-          db.updateCveEnrichment(row.id, { vendor: e.vendor });
-          // Also update stored data with richer CIRCL payload so future enrichments work
+          db.updateCveEnrichment(row.id, { vendor: e.vendor, discovered: e.discovered || null });
           d.prepare('UPDATE cves SET data = ? WHERE id = ?').run(JSON.stringify(data), row.id);
-          return e.vendor;
+          return hadVendor ? 'refreshed' : 'filled';
+        } else if (hadVendor && data.cveMetadata) {
+          // No new vendor but we got richer data — update data blob and discovered date
+          db.updateCveEnrichment(row.id, { discovered: e.discovered || null });
+          d.prepare('UPDATE cves SET data = ? WHERE id = ?').run(JSON.stringify(data), row.id);
+          return 'refreshed';
         }
       } catch (err) {}
       return null;
     }));
-    filled += results.filter(r => r.status === 'fulfilled' && r.value).length;
-    // Rate limit: ~1 second pause between batches
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value === 'filled') filled++;
+      else if (r.status === 'fulfilled' && r.value === 'refreshed') refreshed++;
+    }
     if (i + BATCH_SIZE < rows.length) await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  console.log(`CIRCL vendor enrichment: filled vendor for ${filled}/${rows.length} CVEs`);
+  console.log(`CIRCL vendor enrichment: filled vendor for ${filled}/${missingVendor.length} CVEs, refreshed ${refreshed} data blobs`);
 }
 
 // =========================================================================
@@ -738,8 +795,9 @@ function simplify(item) {
     kev: item._kev || 0,
     exploit: item._exploit || 0,
     patch: item._patch || 0,
+    epss: item._epss != null ? item._epss : null,
     published: extractItemDate(item) ? extractItemDate(item).toISOString() : (item._published || null),
-    discovered: item._discovered || null,
+    updated: item._discovered || null,
     summary: extractSummary(item) || ''
   };
 }
@@ -2011,6 +2069,9 @@ const PORT = settings.server.port || process.env.PORT || 3000;
   // KEV catalog
   await pollKev();
 
+  // EPSS scores
+  await pollEpss();
+
   // Enrich existing CVEs with vendor/exploit/patch metadata
   enrichExistingCves();
 
@@ -2053,6 +2114,9 @@ const PORT = settings.server.port || process.env.PORT || 3000;
 
   // KEV: poll every 6 hours
   setInterval(() => pollKev().catch(() => {}), 6 * 60 * 60 * 1000);
+
+  // EPSS: poll every 12 hours
+  setInterval(() => pollEpss().catch(() => {}), 12 * 60 * 60 * 1000);
 
   // Daily report generation at 03:00
   function scheduleDaily() {
