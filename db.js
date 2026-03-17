@@ -265,12 +265,20 @@ function getCveCount() {
 }
 
 function purgeCves(maxAgeDays) {
+  const d = getDb();
   const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
   // Keep high-risk CVEs (KEV, exploited, or CVSS >= 8) for up to 1 year
   const riskCutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-  const info = getDb().prepare(`DELETE FROM cves WHERE published < ? AND published IS NOT NULL
+  const info = d.prepare(`DELETE FROM cves WHERE published < ? AND published IS NOT NULL
     AND NOT (published >= ? AND (kev = 1 OR has_exploit = 1 OR cvss_score >= 8))`).run(cutoff, riskCutoff);
-  return info.changes;
+  // Also purge CVEs with null published that were fetched long ago
+  const nullInfo = d.prepare(`DELETE FROM cves WHERE published IS NULL AND fetched_at < ?`).run(cutoff);
+  // Purge CVEs whose ID year is more than 2 years old (stale entries from feeds)
+  const cutoffYear = new Date().getFullYear() - 2;
+  const yearInfo = d.prepare(`DELETE FROM cves WHERE CAST(SUBSTR(id, 5, 4) AS INTEGER) > 0
+    AND CAST(SUBSTR(id, 5, 4) AS INTEGER) < ?
+    AND kev != 1 AND (has_exploit != 1 OR has_exploit IS NULL)`).run(cutoffYear);
+  return info.changes + nullInfo.changes + yearInfo.changes;
 }
 
 // --- News helpers ---
