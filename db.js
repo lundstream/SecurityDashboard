@@ -384,6 +384,7 @@ function updateCveEnrichment(cveId, fields) {
   if (fields.vendor != null) { sets.push('vendor=?'); vals.push(fields.vendor); }
   if (fields.discovered != null) { sets.push('discovered=?'); vals.push(fields.discovered); }
   if (fields.epss_score != null) { sets.push('epss_score=?'); vals.push(fields.epss_score); }
+  if (fields.published != null) { sets.push('published=COALESCE(published,?)'); vals.push(fields.published); }
   if (sets.length === 0) return;
   vals.push(cveId);
   d.prepare(`UPDATE cves SET ${sets.join(',')} WHERE id=?`).run(...vals);

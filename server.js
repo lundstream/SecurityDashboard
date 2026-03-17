@@ -741,13 +741,15 @@ async function enrichVendorsFromCircl() {
         const data = await r.json();
         const e = enrichCveItem(row.id, data);
         const hadVendor = !seen.has(row.id); // was in staleData, not missingVendor
+        const pub = extractItemDate(data, row.id);
+        const pubIso = pub ? pub.toISOString() : null;
         if (e.vendor) {
-          db.updateCveEnrichment(row.id, { vendor: e.vendor, discovered: e.discovered || null });
+          db.updateCveEnrichment(row.id, { vendor: e.vendor, discovered: e.discovered || null, published: pubIso });
           d.prepare('UPDATE cves SET data = ? WHERE id = ?').run(JSON.stringify(data), row.id);
           return hadVendor ? 'refreshed' : 'filled';
         } else if (hadVendor && data.cveMetadata) {
           // No new vendor but we got richer data — update data blob and discovered date
-          db.updateCveEnrichment(row.id, { discovered: e.discovered || null });
+          db.updateCveEnrichment(row.id, { discovered: e.discovered || null, published: pubIso });
           d.prepare('UPDATE cves SET data = ? WHERE id = ?').run(JSON.stringify(data), row.id);
           return 'refreshed';
         }
