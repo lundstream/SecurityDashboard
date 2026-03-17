@@ -763,6 +763,21 @@ async function enrichVendorsFromCircl() {
     if (i + BATCH_SIZE < rows.length) await new Promise(resolve => setTimeout(resolve, 1000));
   }
   console.log(`CIRCL vendor enrichment: filled vendor for ${filled}/${missingVendor.length} CVEs, refreshed ${refreshed} data blobs`);
+
+  // Phase 3: backfill published column from existing data blobs
+  const nullPub = d.prepare("SELECT id, data FROM cves WHERE published IS NULL AND data LIKE '%datePublished%'").all();
+  let backfilled = 0;
+  for (const row of nullPub) {
+    try {
+      const item = JSON.parse(row.data);
+      const pub = extractItemDate(item, row.id);
+      if (pub) {
+        d.prepare('UPDATE cves SET published = ? WHERE id = ? AND published IS NULL').run(pub.toISOString(), row.id);
+        backfilled++;
+      }
+    } catch (e) {}
+  }
+  if (backfilled > 0) console.log(`CIRCL vendor enrichment: backfilled published date for ${backfilled} CVEs`);
 }
 
 // =========================================================================
