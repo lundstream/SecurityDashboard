@@ -765,7 +765,7 @@ async function enrichVendorsFromCircl() {
   console.log(`CIRCL vendor enrichment: filled vendor for ${filled}/${missingVendor.length} CVEs, refreshed ${refreshed} data blobs`);
 
   // Phase 3: backfill published column from existing data blobs
-  const nullPub = d.prepare("SELECT id, data FROM cves WHERE published IS NULL AND data LIKE '%datePublished%'").all();
+  const nullPub = d.prepare("SELECT id, data FROM cves WHERE published IS NULL AND id LIKE 'CVE-%'").all();
   let backfilled = 0;
   for (const row of nullPub) {
     try {
@@ -777,7 +777,7 @@ async function enrichVendorsFromCircl() {
       }
     } catch (e) {}
   }
-  if (backfilled > 0) console.log(`CIRCL vendor enrichment: backfilled published date for ${backfilled} CVEs`);
+  console.log(`Published backfill: ${nullPub.length} CVEs with NULL published, ${backfilled} fixed`);
 }
 
 // =========================================================================
