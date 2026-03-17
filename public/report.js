@@ -19,14 +19,15 @@ function fmtDate(dt) {
 }
 
 function renderCveCard(cve) {
+  const isLight = document.documentElement.classList.contains('light-theme');
   const id = escapeHtml(cve.id || '');
   const cvss = cve.cvss != null ? Number(cve.cvss).toFixed(1) : 'N/A';
   let cvssStyle = '';
   const n = parseFloat(cvss);
   if (!isNaN(n)) {
     if (n >= 9) cvssStyle = 'color:#e74c3c;font-weight:700';
-    else if (n >= 8) cvssStyle = 'color:#e67e22;font-weight:700';
-    else if (n >= 6) cvssStyle = 'color:#f1c40f;font-weight:600';
+    else if (n >= 8) cvssStyle = `color:${isLight ? '#c0611b' : '#e67e22'};font-weight:700`;
+    else if (n >= 6) cvssStyle = `color:${isLight ? '#b8860b' : '#f1c40f'};font-weight:600`;
   }
   const vendor = cve.vendor ? escapeHtml(cve.vendor) : '';
   const published = fmtDate(cve.published);
@@ -38,8 +39,8 @@ function renderCveCard(cve) {
   const kevBadge = cve.kev ? '<span class="badge badge-kev">KEV</span>' : '';
   const exploitBadge = cve.exploit ? '<span class="badge badge-exploit">Exploit</span>' : '<span class="badge badge-no">No exploit</span>';
   const patchBadge = cve.patch ? '<span class="badge badge-patch">Patch</span>' : '<span class="badge badge-nopatch">No patch</span>';
-  const epssBadge = cve.epss != null ? `<span class="badge" style="background:rgba(0,180,255,0.18);color:#44bbff;font-weight:600">EPSS: ${(cve.epss * 100).toFixed(1)}%</span>` : '';
-  const vendorBadge = vendor ? `<span class="badge" style="background:rgba(160,100,255,0.15);color:#b07aff;font-weight:600">${vendor}</span>` : '';
+  const epssBadge = cve.epss != null ? `<span class="badge" style="background:${isLight ? 'rgba(0,100,200,0.10)' : 'rgba(0,180,255,0.18)'};color:${isLight ? '#0077cc' : '#44bbff'};font-weight:600">EPSS: ${(cve.epss * 100).toFixed(1)}%</span>` : '';
+  const vendorBadge = vendor ? `<span class="badge" style="background:${isLight ? 'rgba(100,50,200,0.10)' : 'rgba(160,100,255,0.15)'};color:${isLight ? '#5b2d9e' : '#b07aff'};font-weight:600">${vendor}</span>` : '';
 
   const url = id.startsWith('CVE-') ? `https://cve.mitre.org/cgi-bin/cvename.cgi?name=${encodeURIComponent(id)}` : '#';
   const vendorHtml = vendor ? ` • Vendor: ${vendor}` : '';

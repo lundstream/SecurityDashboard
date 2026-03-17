@@ -61,6 +61,7 @@ function riskScoreColor(score) {
 // --- Render CVE items (matches Latest CVE's format) ---
 function renderRiskItems(items) {
   if (!items || !items.length) return '<div style="color:var(--muted);padding:12px">No high-risk CVEs found for this period.</div>';
+  var isLight = document.documentElement.classList.contains('light-theme');
   return items.map(function(it) {
     var id = it.id || '';
     var score = it._riskScore || 0;
@@ -70,8 +71,8 @@ function renderRiskItems(items) {
     var cvssNum = parseFloat(cvss);
     if (!isNaN(cvssNum)) {
       if (cvssNum >= 9) cvssStyle = 'color:#e74c3c;font-weight:700';
-      else if (cvssNum >= 8) cvssStyle = 'color:#e67e22;font-weight:700';
-      else if (cvssNum >= 6) cvssStyle = 'color:#f1c40f;font-weight:600';
+      else if (cvssNum >= 8) cvssStyle = 'color:' + (isLight ? '#c0611b' : '#e67e22') + ';font-weight:700';
+      else if (cvssNum >= 6) cvssStyle = 'color:' + (isLight ? '#b8860b' : '#f1c40f') + ';font-weight:600';
     }
     var url = id.startsWith('CVE-') ? 'https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + encodeURIComponent(id) : '#';
     var title = escapeHtml(it.title || '');
@@ -91,8 +92,8 @@ function renderRiskItems(items) {
     var kevBadge = it._kev ? '<span class="badge badge-kev">KEV</span>' : '';
     var exploitBadge = it._exploit ? '<span class="badge badge-exploit">Exploit</span>' : '<span class="badge badge-no">No exploit</span>';
     var patchBadge = it._patch ? '<span class="badge badge-patch">Patch</span>' : '<span class="badge badge-nopatch">No patch</span>';
-    var epssBadge = it._epss != null ? '<span class="badge" style="background:rgba(0,180,255,0.18);color:#44bbff;font-weight:600">EPSS: ' + (it._epss * 100).toFixed(1) + '%</span>' : '';
-    var vendorBadge = it._vendor ? '<span class="badge" style="background:rgba(160,100,255,0.15);color:#b07aff;font-weight:600">' + escapeHtml(it._vendor) + '</span>' : '';
+    var epssBadge = it._epss != null ? '<span class="badge" style="background:' + (isLight ? 'rgba(0,100,200,0.10)' : 'rgba(0,180,255,0.18)') + ';color:' + (isLight ? '#0077cc' : '#44bbff') + ';font-weight:600">EPSS: ' + (it._epss * 100).toFixed(1) + '%</span>' : '';
+    var vendorBadge = it._vendor ? '<span class="badge" style="background:' + (isLight ? 'rgba(100,50,200,0.10)' : 'rgba(160,100,255,0.15)') + ';color:' + (isLight ? '#5b2d9e' : '#b07aff') + ';font-weight:600">' + escapeHtml(it._vendor) + '</span>' : '';
     var riskBadge = '<span class="badge" style="background:' + color + ';color:#fff;font-weight:700">Risk rating: ' + score + '</span>';
 
     // Summary with truncation (300 chars like Latest CVE's)
