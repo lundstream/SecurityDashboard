@@ -185,20 +185,21 @@ async function backfillCvesFromNvd() {
   const cleaned = db.getDb().prepare("DELETE FROM cves WHERE id NOT LIKE 'CVE-%'").run();
   if (cleaned.changes > 0) console.log(`Cleaned ${cleaned.changes} non-CVE entries from DB`);
 
-  // Check which days in the last 30 days have zero CVEs
+  // Check which days in the last 30 days have incomplete CVE data
   const d = db.getDb();
   const now = new Date();
   const missingDays = [];
+  const recentDays = 5; // always backfill the last N days for completeness
   for (let i = 29; i >= 1; i--) {
     const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const row = d.prepare('SELECT COUNT(*) as cnt FROM cves WHERE published LIKE ?').get(day + '%');
-    if (!row || row.cnt < 100) missingDays.push(day);
+    if (!row || row.cnt < 100 || i <= recentDays) missingDays.push(day);
   }
   if (missingDays.length === 0) {
     console.log('CVE backfill: all 30 days covered, skipping.');
     return;
   }
-  console.log(`CVE backfill: ${missingDays.length} days missing data, fetching from NVD...`);
+  console.log(`CVE backfill: ${missingDays.length} days to check (including last ${recentDays} days), fetching from NVD...`);
 
   // Group consecutive missing days into date ranges to minimize API calls
   const ranges = [];
