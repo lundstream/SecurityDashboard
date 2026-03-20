@@ -13,7 +13,7 @@
     "uptimeMaxAgeDays": 30,
     "uptimeDisplayHours": 24,
     "uptimePrefillDays": 30,
-    "cveInitialFetchCount": 100
+    "cveInitialFetchCount": 300
   },
   "services": {
     "microsoft": {
