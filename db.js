@@ -110,6 +110,16 @@ function initTables() {
   d.exec(`CREATE INDEX IF NOT EXISTS idx_news_source ON news(source)`);
   d.exec(`CREATE INDEX IF NOT EXISTS idx_kev_date_added ON kev(date_added)`);
   d.exec(`CREATE INDEX IF NOT EXISTS idx_ai_period_lang ON ai_analysis(period, language, generated_at)`);
+
+  // Backfill tracking: mark days as fully backfilled from NVD
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS backfill_status (
+      date TEXT PRIMARY KEY,
+      nvd_total INTEGER NOT NULL DEFAULT 0,
+      fetched INTEGER NOT NULL DEFAULT 0,
+      completed_at TEXT
+    )
+  `);
 }
 
 // --- CVE slim helper (extract only fields the frontend needs) ---
@@ -703,6 +713,31 @@ function getRiskVendorStats(maxAgeDays, vendors) {
     LIMIT 10`).all(...params);
 }
 
+// --- Backfill tracking helpers ---
+function getBackfillStatus(date) {
+  return getDb().prepare('SELECT * FROM backfill_status WHERE date = ?').get(date) || null;
+}
+
+function markBackfillComplete(date, nvdTotal, fetched) {
+  getDb().prepare(`
+    INSERT INTO backfill_status (date, nvd_total, fetched, completed_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(date) DO UPDATE SET nvd_total=excluded.nvd_total, fetched=excluded.fetched, completed_at=excluded.completed_at
+  `).run(date, nvdTotal, fetched);
+}
+
+function getIncompleteBackfillDays(maxDays) {
+  const d = getDb();
+  const now = new Date();
+  const days = [];
+  for (let i = maxDays - 1; i >= 1; i--) {
+    const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const status = d.prepare('SELECT completed_at FROM backfill_status WHERE date = ?').get(day);
+    if (!status || !status.completed_at) days.push(day);
+  }
+  return days;
+}
+
 module.exports = {
   getDb,
   upsertCve, getCves, getCvesFiltered, getCveCount, purgeCves,
@@ -715,6 +750,7 @@ module.exports = {
   searchCves, searchNews,
   getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
   getHighRiskCves, getRiskVendorStats,
+  getBackfillStatus, markBackfillComplete, getIncompleteBackfillDays,
   closeDb,
   vacuum, trimOversizedBlobs
 };

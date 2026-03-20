@@ -177,55 +177,37 @@ function extractItemId(it) {
   return it.id || '';
 }
 
-// Backfill CVEs from NVD for the last 30 days if any days are missing data.
+// Backfill CVEs from NVD for up to 365 days.
+// Processes a limited number of incomplete days per run to stay under NVD rate limits.
+// Days are marked complete once all CVEs have been fetched (NVD totalResults reached).
 // NVD public rate limit: ~5 requests per 30 seconds without an API key.
-// We wait 6 seconds between each request to stay well under the limit.
 async function backfillCvesFromNvd() {
   // Clean non-CVE entries (MAL-*, GHSA-*, etc.)
   const cleaned = db.getDb().prepare("DELETE FROM cves WHERE id NOT LIKE 'CVE-%'").run();
   if (cleaned.changes > 0) console.log(`Cleaned ${cleaned.changes} non-CVE entries from DB`);
 
-  // Check which days in the last 30 days have incomplete CVE data
-  const d = db.getDb();
-  const now = new Date();
-  const missingDays = [];
-  const recentDays = 5; // always backfill the last N days for completeness
-  for (let i = 29; i >= 1; i--) {
-    const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const row = d.prepare('SELECT COUNT(*) as cnt FROM cves WHERE published LIKE ?').get(day + '%');
-    if (!row || row.cnt < 100 || i <= recentDays) missingDays.push(day);
-  }
-  if (missingDays.length === 0) {
-    console.log('CVE backfill: all 30 days covered, skipping.');
+  const maxDaysBack = 365;
+  const maxDaysPerRun = 5; // process up to N days per run to avoid long blocking
+
+  const incompleteDays = db.getIncompleteBackfillDays(maxDaysBack);
+  if (incompleteDays.length === 0) {
+    console.log('CVE backfill: all days complete, skipping.');
     return;
   }
-  console.log(`CVE backfill: ${missingDays.length} days to check (including last ${recentDays} days), fetching from NVD...`);
 
-  // Group consecutive missing days into date ranges to minimize API calls
-  const ranges = [];
-  let rangeStart = missingDays[0];
-  let rangeEnd = missingDays[0];
-  for (let i = 1; i < missingDays.length; i++) {
-    const prev = new Date(rangeEnd + 'T00:00:00Z');
-    const curr = new Date(missingDays[i] + 'T00:00:00Z');
-    if (curr.getTime() - prev.getTime() <= 24 * 60 * 60 * 1000) {
-      rangeEnd = missingDays[i];
-    } else {
-      ranges.push({ start: rangeStart, end: rangeEnd });
-      rangeStart = missingDays[i];
-      rangeEnd = missingDays[i];
-    }
-  }
-  ranges.push({ start: rangeStart, end: rangeEnd });
+  // Prioritise: recent days first (reverse order so newest comes first)
+  const daysToProcess = incompleteDays.reverse().slice(0, maxDaysPerRun);
+  console.log(`CVE backfill: ${incompleteDays.length} incomplete days, processing ${daysToProcess.length} (newest first)...`);
 
   const resultsPerPage = 100;
-  for (const range of ranges) {
-    const pubStartDate = range.start + 'T00:00:00.000';
-    const pubEndDate = range.end + 'T23:59:59.999';
+  for (const day of daysToProcess) {
+    const pubStartDate = day + 'T00:00:00.000';
+    const pubEndDate = day + 'T23:59:59.999';
     let totalResults = Infinity;
     let fetched = 0;
     let pageIndex = 0;
-    console.log(`  Backfilling ${range.start} to ${range.end}...`);
+    let complete = false;
+    console.log(`  Backfilling ${day}...`);
     while (fetched < totalResults) {
       try {
         const url = `${settings.cve.nvdV2Url}?pubStartDate=${encodeURIComponent(pubStartDate)}&pubEndDate=${encodeURIComponent(pubEndDate)}&resultsPerPage=${resultsPerPage}&startIndex=${pageIndex * resultsPerPage}`;
@@ -236,7 +218,7 @@ async function backfillCvesFromNvd() {
           continue; // retry same page
         }
         if (!r.ok) {
-          console.error(`  NVD returned status ${r.status}, skipping range.`);
+          console.error(`  NVD returned status ${r.status}, skipping day.`);
           break;
         }
         const json = await r.json();
@@ -254,15 +236,19 @@ async function backfillCvesFromNvd() {
         fetched += vulns.length;
         console.log(`    Page ${pageIndex + 1}: ${vulns.length} CVEs (${fetched}/${totalResults})`);
         pageIndex++;
-        if (vulns.length === 0) break;
-        if (fetched < totalResults) await sleep(6000);
+        if (vulns.length === 0 || fetched >= totalResults) { complete = true; break; }
+        await sleep(6000);
       } catch (e) {
         console.error('  NVD backfill error:', e && e.message);
         break;
       }
     }
+    if (complete) {
+      db.markBackfillComplete(day, totalResults, fetched);
+      console.log(`    ${day}: complete (${fetched} CVEs)`);
+    }
   }
-  console.log(`CVE backfill complete: DB now has ${db.getCveCount()} CVEs`);
+  console.log(`CVE backfill run done: DB now has ${db.getCveCount()} CVEs, ${incompleteDays.length - daysToProcess.filter(d => db.getBackfillStatus(d)?.completed_at).length} days remaining`);
 }
 
 async function pollCves() {
