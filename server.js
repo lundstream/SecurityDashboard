@@ -192,7 +192,7 @@ async function backfillCvesFromNvd() {
   for (let i = 29; i >= 1; i--) {
     const day = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const row = d.prepare('SELECT COUNT(*) as cnt FROM cves WHERE published LIKE ?').get(day + '%');
-    if (!row || row.cnt < 10) missingDays.push(day);
+    if (!row || row.cnt < 30) missingDays.push(day);
   }
   if (missingDays.length === 0) {
     console.log('CVE backfill: all 30 days covered, skipping.');
@@ -267,9 +267,8 @@ async function backfillCvesFromNvd() {
 async function pollCves() {
   try {
     const currentCount = db.getCveCount();
-    const url = currentCount === 0
-      ? `${settings.cve.circlLastUrl}/${settings.polling.cveInitialFetchCount}`
-      : settings.cve.circlLastUrl;
+    const fetchCount = settings.polling.cveInitialFetchCount || 100;
+    const url = `${settings.cve.circlLastUrl}/${fetchCount}`;
     const r = await fetch(url);
     let data = await r.json();
     if (!Array.isArray(data)) {
@@ -2151,6 +2150,9 @@ const PORT = settings.server.port || process.env.PORT || 3000;
 
   // EPSS: poll every 12 hours
   setInterval(() => pollEpss().catch(() => {}), 12 * 60 * 60 * 1000);
+
+  // NVD backfill: run every hour to catch gaps
+  setInterval(() => backfillCvesFromNvd().catch(() => {}), 60 * 60 * 1000);
 
   // Daily report generation at 03:00
   function scheduleDaily() {
